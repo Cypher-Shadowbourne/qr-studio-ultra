@@ -1,0 +1,1 @@
+High-performance, privacy-first QR generator built in Rust.

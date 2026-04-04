@@ -1,0 +1,13 @@
+QR Studio Ultra is a premium, offline-first QR code generator designed for speed, beauty, and absolute privacy. Unlike generic web-wrapped apps, it utilizes a custom-built Rust rendering engine to ensure every pixel is mathematically perfect.
+
+✨ FEATURES:
+• High-Performance Rendering: Powered by a compiled ARM64 Rust backend for lightning-fast, memory-safe generation.
+• Custom Aesthetics: Support for gradients, custom "eye" shapes (Finder Patterns), and rounded data modules.
+• Smart Logo Integration: Includes an interactive, frontend-optimized cropper to embed logos perfectly into your codes.
+• Privacy by Design: 100% offline. No trackers, no analytics, no external calls. Your data never leaves your device.
+• Professional Export: Save high-resolution PNGs directly to your gallery using native Android MediaStore APIs.
+
+🇮🇪 SPECIALIZED TOOLS:
+Includes a dedicated Irish Dog Tag validator. Ensure your pet's 15-digit microchip code is accurate and compliant with local requirements using our specialized UI flow.
+
+Built by Cypher Shadowbourne. Open source, ad-free, and forever private.
