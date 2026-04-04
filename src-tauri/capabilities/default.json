@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for the QR Studio Ultra",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:image:default",
+    "core:webview:default",
+	"barcode-scanner:default",
+    "shell:default",
+    "shell:allow-open"
+  ]
+}
