@@ -29,7 +29,7 @@ Uploading a 12-megapixel photo to a mobile backend creates massive Base64 bottle
 Features specialized UX flows, including an "Irish Dog Tag" generator that validates the 15-digit microchip requirement under Irish law, utilizing custom warning modals without hard-blocking user intent.
 
 ### 🔒 100% Privacy First
-Zero external tracking. Zero analytics. QR codes are generated entirely locally on-device. The app utilizes native Android `MediaStore` APIs to save high-res PNGs and transparent-corrected JPGs directly to the user's gallery.
+Zero external tracking. Zero analytics. QR codes are generated entirely locally on-device. The app utilizes native Android `MediaStore` APIs to save high-res PNGs and transparent-corrected JPGs directly to the user's Gallery/downloads (device downloads in my use case).
 
 ---
 
