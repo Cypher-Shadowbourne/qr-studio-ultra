@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "qr-studio-pro",
-  "version": "0.1.0",
-  "identifier": "com.pbess.qr-studio-pro",
+  "productName": "qr-studio-ultra",
+  "version": "1.0.0",
+  "identifier": "com.cypher.qrstudioultra",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
