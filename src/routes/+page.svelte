@@ -4,7 +4,7 @@
 
   // Data Types & Variables
   let dataType = "URL";
-  let qrData = "https://CypherShadowbourne.dev";
+  let qrData = "https://yoursite";
   let wifiSsid = "";
   let wifiPass = "";
   
