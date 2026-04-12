@@ -279,6 +279,18 @@
 
   async function printCode() {
     if (!qrImagePng) return;
+    const printHeading = printTitle.trim() || generatedLabel;
+
+    if (isNativeMobileDevice()) {
+      try {
+        const msg = await invoke<string>("print_current_image", { b64: qrImagePng, title: printHeading });
+        showSaveToastMessage(msg, "info");
+      } catch (e) {
+        showSaveToastMessage("Could not open print dialog: " + e, "error");
+      }
+      return;
+    }
+
     if (typeof window === "undefined" || typeof window.print !== "function") {
       showSaveToastMessage("Printing is not available on this device.", "error");
       return;
@@ -1276,16 +1288,6 @@
         <button class="save-btn secondary-action" on:click={printCode} disabled={!qrImagePng}>
           PRINT CODE
         </button>
-        <div class="sub-panel print-title-panel">
-          <p class="sub-label">Print Title</p>
-          <input
-            type="text"
-            bind:value={printTitle}
-            placeholder="Add a custom title for printed sheets..."
-            disabled={!qrImagePng}
-          />
-          <p class="sub-note">This only changes the printed heading. It does not change the QR data.</p>
-        </div>
         {#if isNativeMobileDevice()}
           <p class="save-hint">Android saves straight to <strong>Gallery/Photos</strong> in <strong>Pictures/QR Studio Ultra</strong>.</p>
         {/if}
@@ -1329,6 +1331,15 @@
       {#if qrImagePng}
         <div class="preview-area">
           <img src={qrImagePng} alt="QR Preview" />
+          <div class="sub-panel print-title-panel">
+            <p class="sub-label">Print Title</p>
+            <input
+              type="text"
+              bind:value={printTitle}
+              placeholder="Add a custom title for printed sheets..."
+            />
+            <p class="sub-note">This only changes the printed heading. It does not change the QR data.</p>
+          </div>
         </div>
       {/if}
 
@@ -1519,6 +1530,13 @@
 
   .preview-area { background-color: transparent; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; margin-top: 10px; }
   .preview-area img { max-width: 100%; border-radius: 12px; background-color: transparent; }
+  .print-title-panel {
+    width: 100%;
+    margin-top: 0;
+  }
+  .print-title-panel input {
+    margin-bottom: 0;
+  }
   .print-sheet { display: none; }
   .print-card {
     width: 100%;

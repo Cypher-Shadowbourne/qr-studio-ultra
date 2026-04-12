@@ -231,6 +231,94 @@ fn run_android_media_action(app: &tauri::AppHandle, method_name: &'static str) -
         .map_err(|_| "Android media action timed out before returning a result.".to_string())?
 }
 
+#[cfg(target_os = "android")]
+fn print_android_image(
+    app: &tauri::AppHandle,
+    decoded: &[u8],
+    title: &str,
+    mime_type: &str,
+) -> Result<String, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Could not access the main app window for Android printing.".to_string())?;
+
+    let (tx, rx) = mpsc::channel();
+    let bytes = decoded.to_vec();
+    let title = title.to_string();
+    let mime_type = mime_type.to_string();
+
+    window
+        .with_webview(move |webview| {
+            webview.jni_handle().exec(move |env, activity, _| {
+                let result = (|| -> Result<String, String> {
+                    let class_name = env
+                        .new_string("com.cypher.qrstudioultra.MediaStoreSaver")
+                        .map_err(|e| format!("Could not prepare Android printer class name: {e}"))?;
+                    let saver_class = env
+                        .call_method(
+                            activity,
+                            "getAppClass",
+                            "(Ljava/lang/String;)Ljava/lang/Class;",
+                            &[JValue::Object(&JObject::from(class_name))],
+                        )
+                        .map_err(|e| format!("Could not resolve Android printer class: {e}"))?
+                        .l()
+                        .map_err(|e| format!("Could not find Android printer class: {e}"))?;
+                    let saver_class = JClass::from(saver_class);
+                    let saver_instance = env
+                        .get_static_field(&saver_class, "INSTANCE", "Lcom/cypher/qrstudioultra/MediaStoreSaver;")
+                        .map_err(|e| format!("Could not access Android printer singleton: {e}"))?
+                        .l()
+                        .map_err(|e| format!("Android printer singleton was invalid: {e}"))?;
+
+                    let bytes_array = env
+                        .byte_array_from_slice(&bytes)
+                        .map_err(|e| format!("Could not prepare image bytes for Android printing: {e}"))?;
+                    let title_java = env
+                        .new_string(&title)
+                        .map_err(|e| format!("Could not prepare Android print title: {e}"))?;
+                    let mime_java = env
+                        .new_string(&mime_type)
+                        .map_err(|e| format!("Could not prepare Android print MIME type: {e}"))?;
+
+                    let bytes_obj = JObject::from(bytes_array);
+                    let title_obj = JObject::from(title_java);
+                    let mime_obj = JObject::from(mime_java);
+
+                    let result = env
+                        .call_method(
+                            &saver_instance,
+                            "printQrImage",
+                            "(Landroid/app/Activity;[BLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+                            &[
+                                JValue::Object(activity),
+                                JValue::Object(&bytes_obj),
+                                JValue::Object(&title_obj),
+                                JValue::Object(&mime_obj),
+                            ],
+                        )
+                        .map_err(|e| format!("Android print failed: {e}"))?
+                        .l()
+                        .map_err(|e| format!("Android print returned an invalid result: {e}"))?;
+
+                    let result = env
+                        .get_string(&JString::from(result))
+                        .map_err(|e| format!("Could not read Android print result: {e}"))?
+                        .to_string_lossy()
+                        .into_owned();
+
+                    Ok(result)
+                })();
+
+                let _ = tx.send(result);
+            });
+        })
+        .map_err(|e| format!("Could not schedule Android print: {e}"))?;
+
+    rx.recv_timeout(Duration::from_secs(15))
+        .map_err(|_| "Android print timed out before returning a result.".to_string())?
+}
+
 // Save into a user-visible folder on mobile whenever possible.
 #[tauri::command]
 async fn save_to_device(app: tauri::AppHandle, b64: String, format: String) -> Result<MobileSaveResult, String> {
@@ -272,6 +360,28 @@ async fn save_to_device(app: tauri::AppHandle, b64: String, format: String) -> R
         let msg = format!("Saved to: {}", file_path.display());
 
         Ok(MobileSaveResult { message: msg })
+    }
+}
+
+#[tauri::command]
+async fn print_current_image(app: tauri::AppHandle, b64: String, title: String) -> Result<String, String> {
+    let clean_b64 = if b64.contains(',') { b64.split(',').nth(1).unwrap_or(&b64) } else { &b64 };
+    let decoded = general_purpose::STANDARD.decode(clean_b64).map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "android")]
+    {
+        return tauri::async_runtime::spawn_blocking(move || {
+            print_android_image(&app, &decoded, &title, "image/png")
+        })
+        .await
+        .map_err(|e| format!("Android print task failed: {e}"))?;
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        let _ = title;
+        Err("Native printing is only implemented on Android in this command.".to_string())
     }
 }
 
@@ -569,7 +679,8 @@ pub fn run() {
             save_to_path,
             open_external_link,
             open_last_saved_image,
-            share_last_saved_image
+            share_last_saved_image,
+            print_current_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
