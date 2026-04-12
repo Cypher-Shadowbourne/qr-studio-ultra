@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
   import { save } from "@tauri-apps/plugin-dialog";
@@ -98,6 +99,10 @@
   let saveToastTone: "success" | "error" | "info" = "success";
   let saveToastTimer: ReturnType<typeof setTimeout> | null = null;
   let recentSaves: { label: string; timestamp: string }[] = [];
+  let generatedPayload = "";
+  let generatedLabel = "QR Code";
+  let printTitle = "";
+  let generatedAt = "";
   
   // Scanner & Modal State
   let isScanning = false; 
@@ -245,6 +250,42 @@
   function rememberRecentSave(label: string) {
     const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     recentSaves = [{ label, timestamp }, ...recentSaves].slice(0, 3);
+  }
+
+  function getGeneratedLabel() {
+    if (dataType === "DogTag" && petName.trim()) return `${petName.trim()} Dog Tag`;
+    if (dataType === "WiFi" && wifiSsid.trim()) return `${wifiSsid.trim()} WiFi`;
+    if (dataType === "vCard" && (vCardFirst.trim() || vCardLast.trim())) return `${vCardFirst.trim()} ${vCardLast.trim()}`.trim();
+    if (dataType === "Email" && emailTo.trim()) return `Email for ${emailTo.trim()}`;
+    if (dataType === "SMS" && smsPhone.trim()) return `SMS for ${smsPhone.trim()}`;
+    if (dataType === "Phone" && phoneNum.trim()) return `Phone ${phoneNum.trim()}`;
+    if (dataType === "Geo" && geoLat.trim() && geoLng.trim()) return `Location ${geoLat.trim()}, ${geoLng.trim()}`;
+    if (dataType === "WhatsApp" && waPhone.trim()) return `WhatsApp ${waPhone.trim()}`;
+    if (dataType === "Crypto" && cryptoType.trim()) return `${cryptoType.trim()} Wallet`;
+    if (dataType === "Event" && eventTitle.trim()) return eventTitle.trim();
+    if (dataType === "Social" && socialUser.trim()) return `${socialPlatform} ${socialUser.trim()}`;
+    if (dataType === "LinkedIn" && linkedinUser.trim()) return `LinkedIn ${linkedinUser.trim()}`;
+    if (dataType === "YouTube" && ytHandle.trim()) return `YouTube ${ytHandle.trim()}`;
+    if (dataType === "TikTok" && tiktokUser.trim()) return `TikTok ${tiktokUser.trim()}`;
+    if (dataType === "Zoom" && zoomMeetingId.trim()) return `Zoom ${zoomMeetingId.trim()}`;
+    if (dataType === "URL" && qrData.trim()) return qrData.trim();
+    return `${dataType} QR Code`;
+  }
+
+  function getPrintPayloadPreview() {
+    const compact = generatedPayload.replace(/\s+/g, " ").trim();
+    return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
+  }
+
+  async function printCode() {
+    if (!qrImagePng) return;
+    if (typeof window === "undefined" || typeof window.print !== "function") {
+      showSaveToastMessage("Printing is not available on this device.", "error");
+      return;
+    }
+
+    await tick();
+    window.print();
   }
 
   // --- SAVE TO NATIVE GALLERY ---
@@ -828,6 +869,12 @@
         jctx.drawImage(canvas, 0, 0);
         
         qrImageJpg = jpgCanvas.toDataURL("image/jpeg", 1.0);
+        generatedPayload = finalData;
+        generatedLabel = getGeneratedLabel();
+        if (!printTitle.trim() || printTitle.trim() === generatedLabel.trim()) {
+          printTitle = generatedLabel;
+        }
+        generatedAt = new Date().toLocaleString();
         loading = false;
       };
       img.src = rustImageB64;
@@ -1226,6 +1273,19 @@
             {isNativeMobileDevice() ? "💾 SAVE TO GALLERY" : "💾 SAVE IMAGE"}
           </button>
         </div>
+        <button class="save-btn secondary-action" on:click={printCode} disabled={!qrImagePng}>
+          PRINT CODE
+        </button>
+        <div class="sub-panel print-title-panel">
+          <p class="sub-label">Print Title</p>
+          <input
+            type="text"
+            bind:value={printTitle}
+            placeholder="Add a custom title for printed sheets..."
+            disabled={!qrImagePng}
+          />
+          <p class="sub-note">This only changes the printed heading. It does not change the QR data.</p>
+        </div>
         {#if isNativeMobileDevice()}
           <p class="save-hint">Android saves straight to <strong>Gallery/Photos</strong> in <strong>Pictures/QR Studio Ultra</strong>.</p>
         {/if}
@@ -1273,6 +1333,19 @@
       {/if}
 
     </div>
+  {/if}
+
+  {#if qrImagePng}
+    <section class="print-sheet" aria-hidden="true">
+      <div class="print-card">
+        <div class="print-brand">QR Studio Ultra</div>
+        <h1>{printTitle.trim() || generatedLabel}</h1>
+        <img src={qrImagePng} alt="Printable QR code" />
+        <p class="print-type">{dataType} code</p>
+        <p class="print-payload">{getPrintPayloadPreview()}</p>
+        <p class="print-stamp">Generated {generatedAt}</p>
+      </div>
+    </section>
   {/if}
 </main>
 
@@ -1446,6 +1519,61 @@
 
   .preview-area { background-color: transparent; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; margin-top: 10px; }
   .preview-area img { max-width: 100%; border-radius: 12px; background-color: transparent; }
+  .print-sheet { display: none; }
+  .print-card {
+    width: 100%;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 24px;
+    background: #ffffff;
+    color: #0f1720;
+    text-align: center;
+    box-sizing: border-box;
+  }
+  .print-brand {
+    font-size: 0.82rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #526173;
+    font-weight: 800;
+  }
+  .print-card h1 {
+    margin: 10px 0 18px;
+    font-size: 1.8rem;
+    line-height: 1.15;
+    color: #111827;
+  }
+  .print-card img {
+    width: min(100%, 420px);
+    display: block;
+    margin: 0 auto 18px;
+    border-radius: 18px;
+  }
+  .print-type,
+  .print-payload,
+  .print-stamp {
+    margin: 0;
+  }
+  .print-type {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #233247;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .print-payload {
+    margin-top: 12px;
+    color: #3c4858;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .print-stamp {
+    margin-top: 14px;
+    font-size: 0.86rem;
+    color: #6b7a8c;
+  }
   .save-hint { margin: 0; text-align: center; font-size: 0.9rem; color: #b9c2cf; }
   .save-toast {
     margin-top: 12px;
@@ -1531,6 +1659,41 @@
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
+    }
+  }
+
+  @media print {
+    :global(body) {
+      background: #ffffff !important;
+      color: #111827 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    }
+
+    .mobile-app {
+      max-width: none;
+      min-height: auto;
+      margin: 0;
+      padding: 0;
+      display: block;
+    }
+
+    .mobile-app > :not(.print-sheet) {
+      display: none !important;
+    }
+
+    .print-sheet {
+      display: block;
+      padding: 0.5in;
+    }
+
+    .print-card {
+      max-width: none;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
     }
   }
 </style>
