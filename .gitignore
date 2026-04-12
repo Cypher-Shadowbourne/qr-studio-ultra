@@ -16,6 +16,7 @@ vite.config.ts.timestamp-*
 # Keystore and secrets
 *.jks
 *.keystore
+my-release-key.jks
 keystore.properties
 Keystore properties.txt
 local.properties
