@@ -8,6 +8,8 @@
     "main"
   ],
   "permissions": [
-    "barcode-scanner:default"
+    "barcode-scanner:default",
+    "dialog:default",
+    "dialog:allow-save"
   ]
 }

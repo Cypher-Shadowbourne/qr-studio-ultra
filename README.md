@@ -29,7 +29,7 @@ Uploading a 12-megapixel photo to a mobile backend creates massive Base64 bottle
 Features specialized UX flows, including an "Irish Dog Tag" generator that validates the 15-digit microchip requirement under Irish law, utilizing custom warning modals without hard-blocking user intent.
 
 ### 🔒 100% Privacy First
-Zero external tracking. Zero analytics. QR codes are generated entirely locally on-device. The app utilizes native Android `MediaStore` APIs to save high-res PNGs and transparent-corrected JPGs directly to the user's Gallery/downloads (device downloads in my use case).
+Zero external tracking. Zero analytics. QR codes are generated entirely locally on-device. On Android, generated codes save into a normal shared folder at `Downloads/QR Studio Ultra` so users can find them without digging through app-private storage.
 
 ---
 
@@ -48,11 +48,37 @@ If you want to clone this repository and build it yourself, ensure you have the 
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/Cypher-Shadowbourne/qr-studio-ultra.git](https://github.com/Cypher-Shadowbourne/qr-studio-ultra.git)
+git clone https://github.com/Cypher-Shadowbourne/qr-studio-ultra.git
 cd qr-studio-ultra
 
 # 2. Install frontend dependencies
 npm install
 
 # 3. Build the Android APK (requires connected device or emulator)
-npm run tauri android build -- --target aarch64
+npx tauri android build --target aarch64
+```
+
+## 🛠️ Build Patches & Troubleshooting
+
+This project includes specific patches in the `src-tauri/gen/android` directory to resolve common Tauri 2.0 + Kotlin compatibility issues:
+
+### 1. Missing Kotlin Plugin in Dependencies
+Certain registry-based dependencies (like `tauri-android` and `tauri-plugin-shell`) may fail to apply the Kotlin Android plugin. We've patched the root `build.gradle.kts` to inject the plugin into all library modules automatically:
+```kotlin
+project.plugins.withId("com.android.library") {
+    if (!project.plugins.hasPlugin("org.jetbrains.kotlin.android")) {
+        project.plugins.apply("org.jetbrains.kotlin.android")
+    }
+}
+```
+
+### 2. JVM Target Compatibility
+To resolve "Inconsistent JVM-target compatibility" errors, the build is forced to use `JVM 1.8` across all Kotlin tasks and the application module:
+```kotlin
+kotlinOptions {
+    jvmTarget = "1.8"
+}
+```
+
+### 3. SDK Versioning
+The project is configured to use **Compile SDK 36** and **Target SDK 36** to ensure compatibility with the latest Android features and security standards.
