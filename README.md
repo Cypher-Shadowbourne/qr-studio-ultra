@@ -5,7 +5,7 @@
 ![Frontend](https://img.shields.io/badge/Frontend-Svelte-FF3E00?logo=svelte&logoColor=white)
 ![Backend](https://img.shields.io/badge/Backend-Rust-000000?logo=rust&logoColor=white)
 
-**QR Studio Ultra** is a premium, privacy-first, offline QR code generator built with a true hybrid architecture. Designed to replace generic, ad-filled utility apps, it features a custom-built pixel rendering engine in Rust and a lightning-fast Svelte frontend.
+**QR Studio Ultra** is a premium, privacy-first, offline QR code generator built with a truly hybrid architecture. Designed to replace generic, ad-filled utility apps, it features a custom-built pixel rendering engine in Rust and a lightning-fast Svelte frontend.
 
 > **Download the latest Android APK from the [Releases Tab](../../releases).**
 
