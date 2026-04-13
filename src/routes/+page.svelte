@@ -1,8 +1,18 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
+  import { Format, scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
   import { save } from "@tauri-apps/plugin-dialog";
+
+  type SavedWallet = {
+    id: string;
+    name: string;
+    network: string;
+    address: string;
+    amount: string;
+    label: string;
+    message: string;
+  };
 
   // Data Types & Variables
   let dataType = "URL";
@@ -38,6 +48,10 @@
 
   let cryptoAddr = "";
   let cryptoType = "bitcoin";
+  let cryptoAmount = "";
+  let cryptoLabel = "";
+  let cryptoMessage = "";
+  let walletName = "";
 
   let eventTitle = "";
   let eventStart = "";
@@ -107,7 +121,11 @@
   // Scanner & Modal State
   let isScanning = false; 
   let scannedResult = ""; 
+  let scannedFormat = "";
+  let scannedKind = "";
+  let scannedResultCanOpen = false;
   let showDogTagWarning = false; 
+  let savedWallets: SavedWallet[] = [];
 
   // --- NEW: Interactive Crop State ---
   let showCropModal = false;
@@ -140,6 +158,12 @@
     { name: "Midnight", c1: "#232526", c2: "#414345" },
     { name: "Berry", c1: "#8E2DE2", c2: "#4A00E0" }
   ];
+  const walletStorageKey = "qr-studio-ultra.wallets";
+  const scannerFormats = Object.values(Format);
+
+  onMount(() => {
+    loadSavedWallets();
+  });
 
   function applySolid(c: string) { color1 = c; fillType = "Solid"; }
   function applyGradient(c1: string, c2: string) { color1 = c1; color2 = c2; fillType = "Linear"; }
@@ -252,6 +276,170 @@
     recentSaves = [{ label, timestamp }, ...recentSaves].slice(0, 3);
   }
 
+  function toDisplayCase(value: string) {
+    return value
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function getWalletScheme(type: string) {
+    const schemes: Record<string, string> = {
+      bitcoin: "bitcoin",
+      ethereum: "ethereum",
+      litecoin: "litecoin",
+      dogecoin: "dogecoin",
+      solana: "solana"
+    };
+    return schemes[type] ?? type;
+  }
+
+  function normalizeDecimalAmount(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (!/^\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+
+    const normalized = trimmed
+      .replace(/^0+(?=\d)/, "")
+      .replace(/(\.\d*?)0+$/, "$1")
+      .replace(/\.$/, "");
+
+    return normalized || "0";
+  }
+
+  function decimalToAtomicUnits(value: string, decimals: number) {
+    const trimmed = normalizeDecimalAmount(value);
+    if (!trimmed || !/^\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+
+    const [whole, fraction = ""] = trimmed.split(".");
+    const paddedFraction = (fraction + "0".repeat(decimals)).slice(0, decimals);
+    const atomic = `${whole}${paddedFraction}`.replace(/^0+(?=\d)/, "");
+    return atomic || "0";
+  }
+
+  function buildCryptoPayload() {
+    const scheme = getWalletScheme(cryptoType);
+    const address = cryptoAddr.trim();
+    const amount = normalizeDecimalAmount(cryptoAmount);
+
+    if (!address) return `${scheme}:`;
+
+    if (cryptoType === "ethereum") {
+      const query = new URLSearchParams();
+      if (amount) {
+        query.set("value", decimalToAtomicUnits(amount, 18));
+      }
+      if (cryptoMessage.trim()) {
+        query.set("message", cryptoMessage.trim());
+      }
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      return `ethereum:pay-${address}${suffix}`;
+    }
+
+    if (cryptoType === "solana") {
+      const query = new URLSearchParams();
+      if (amount) {
+        query.set("amount", amount);
+      }
+      if (cryptoLabel.trim()) {
+        query.set("label", cryptoLabel.trim());
+      }
+      if (cryptoMessage.trim()) {
+        query.set("message", cryptoMessage.trim());
+      }
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      return `solana:${address}${suffix}`;
+    }
+
+    const query = new URLSearchParams();
+    if (amount) {
+      query.set("amount", amount);
+    }
+    if (cryptoLabel.trim()) {
+      query.set("label", cryptoLabel.trim());
+    }
+    if (cryptoMessage.trim()) {
+      query.set("message", cryptoMessage.trim());
+    }
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return `${scheme}:${address}${suffix}`;
+  }
+
+  function loadSavedWallets() {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(walletStorageKey);
+      savedWallets = raw ? JSON.parse(raw) : [];
+    } catch {
+      savedWallets = [];
+    }
+  }
+
+  function persistSavedWallets() {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(walletStorageKey, JSON.stringify(savedWallets));
+  }
+
+  function saveCurrentWalletProfile() {
+    if (!walletName.trim()) {
+      showSaveToastMessage("Please enter a wallet profile name before saving.", "error");
+      return;
+    }
+    if (!cryptoAddr.trim()) {
+      showSaveToastMessage("Please enter a wallet address before saving.", "error");
+      return;
+    }
+
+    const wallet: SavedWallet = {
+      id: `${Date.now()}`,
+      name: walletName.trim(),
+      network: cryptoType,
+      address: cryptoAddr.trim(),
+      amount: cryptoAmount.trim(),
+      label: cryptoLabel.trim(),
+      message: cryptoMessage.trim()
+    };
+
+    savedWallets = [
+      wallet,
+      ...savedWallets.filter((entry) => !(entry.name === wallet.name && entry.address === wallet.address && entry.network === wallet.network))
+    ];
+    persistSavedWallets();
+    showSaveToastMessage(`Saved wallet profile for ${wallet.name}.`, "success");
+  }
+
+  function loadWalletProfile(wallet: SavedWallet) {
+    dataType = "Crypto";
+    walletName = wallet.name;
+    cryptoType = wallet.network;
+    cryptoAddr = wallet.address;
+    cryptoAmount = wallet.amount;
+    cryptoLabel = wallet.label;
+    cryptoMessage = wallet.message;
+    showSaveToastMessage(`Loaded ${wallet.name}.`, "info");
+  }
+
+  function deleteWalletProfile(id: string) {
+    savedWallets = savedWallets.filter((wallet) => wallet.id !== id);
+    persistSavedWallets();
+    showSaveToastMessage("Wallet profile removed.", "info");
+  }
+
+  function classifyScan(content: string, format: Format) {
+    if (format !== Format.QRCode) return "Barcode";
+    if (/^(https?:\/\/|www\.)/i.test(content)) return "Link";
+    if (/^(bitcoin|ethereum|litecoin|dogecoin|solana):/i.test(content)) return "Crypto Wallet";
+    if (/^(mailto:|tel:|sms:|smsto:|geo:)/i.test(content)) return "Action";
+    if (/^WIFI:/i.test(content)) return "WiFi";
+    if (/^BEGIN:VCARD/i.test(content)) return "Contact";
+    if (/^BEGIN:VCALENDAR/i.test(content)) return "Event";
+    return "QR Code";
+  }
+
+  function canOpenResult(value: string) {
+    return /^(https?:\/\/|www\.|mailto:|tel:|sms:|smsto:|geo:)/i.test(value.trim());
+  }
+
   function getGeneratedLabel() {
     if (dataType === "DogTag" && petName.trim()) return `${petName.trim()} Dog Tag`;
     if (dataType === "WiFi" && wifiSsid.trim()) return `${wifiSsid.trim()} WiFi`;
@@ -261,7 +449,8 @@
     if (dataType === "Phone" && phoneNum.trim()) return `Phone ${phoneNum.trim()}`;
     if (dataType === "Geo" && geoLat.trim() && geoLng.trim()) return `Location ${geoLat.trim()}, ${geoLng.trim()}`;
     if (dataType === "WhatsApp" && waPhone.trim()) return `WhatsApp ${waPhone.trim()}`;
-    if (dataType === "Crypto" && cryptoType.trim()) return `${cryptoType.trim()} Wallet`;
+    if (dataType === "Crypto" && walletName.trim()) return walletName.trim();
+    if (dataType === "Crypto" && cryptoType.trim()) return `${toDisplayCase(cryptoType.trim())} Wallet`;
     if (dataType === "Event" && eventTitle.trim()) return eventTitle.trim();
     if (dataType === "Social" && socialUser.trim()) return `${socialPlatform} ${socialUser.trim()}`;
     if (dataType === "LinkedIn" && linkedinUser.trim()) return `LinkedIn ${linkedinUser.trim()}`;
@@ -357,6 +546,8 @@
   // --- NATIVE SCANNER FUNCTIONS ---
   async function startScan() {
     scannedResult = ""; 
+    scannedFormat = "";
+    scannedKind = "";
     try {
       try {
         await requestPermissions();
@@ -366,10 +557,12 @@
       }
 
       isScanning = true;
-      const result = await scan({ windowed: true });
+      const result = await scan({ windowed: true, cameraDirection: "back", formats: scannerFormats });
       
       if (result && result.content) {
          scannedResult = result.content.trim();
+         scannedFormat = toDisplayCase(result.format);
+         scannedKind = classifyScan(scannedResult, result.format);
       }
     } catch (e) {
       if (e !== "Canceled" && e !== "cancel") {
@@ -421,6 +614,7 @@
     if (dataType === "Email" && !emailTo.trim()) return "Please enter a destination Email Address.";
     if (dataType === "SMS" && !smsPhone.trim()) return "Please enter a destination Phone Number.";
     if (dataType === "Phone" && !phoneNum.trim()) return "Please enter a Phone Number.";
+    if (dataType === "Crypto" && !cryptoAddr.trim()) return "Please enter a wallet address.";
     
     if (dataType === "Geo") {
       if (!geoLat.trim() || !geoLng.trim()) return "Please enter both Latitude and Longitude.";
@@ -473,7 +667,7 @@
     } else if (dataType === "WhatsApp") {
       finalData = `https://wa.me/${waPhone.replace(/\D/g, '')}?text=${encodeURIComponent(waMsg)}`;
     } else if (dataType === "Crypto") {
-      finalData = `${cryptoType}:${cryptoAddr}`;
+      finalData = buildCryptoPayload();
     } else if (dataType === "Event") {
       const cleanDate = (d: string) => {
         if (!d) return "";
@@ -904,6 +1098,8 @@
       document.body.classList.remove('scanning-active');
     }
   }
+
+  $: scannedResultCanOpen = canOpenResult(scannedResult);
 </script>
 
 <main class="mobile-app">
@@ -911,7 +1107,17 @@
     <div class="scanner-overlay">
       <div class="scanner-header">
         <h2>SCANNING...</h2>
-        <p>Point camera at a QR Code</p>
+        <p>Point camera at a QR code or barcode</p>
+      </div>
+      <div class="scanner-stage">
+        <div class="scanner-target">
+          <div class="scanner-corner top-left"></div>
+          <div class="scanner-corner top-right"></div>
+          <div class="scanner-corner bottom-left"></div>
+          <div class="scanner-corner bottom-right"></div>
+          <div class="scanner-line"></div>
+        </div>
+        <p class="scanner-caption">Reads QR, EAN, UPC, Code 39, Code 128, PDF417 and more</p>
       </div>
       <button class="cancel-scan-btn" on:click={cancelScanner}>CANCEL SCAN</button>
     </div>
@@ -1024,11 +1230,19 @@
       {#if scannedResult}
         <fieldset class="panel result-panel">
           <legend class="result-legend">Scanned Result</legend>
+          <div class="scan-meta">
+            <span>{scannedKind || "Scan"}</span>
+            {#if scannedFormat}
+              <span>{scannedFormat}</span>
+            {/if}
+          </div>
           <div class="scanned-text-box">{scannedResult}</div>
           <div class="result-actions">
-            <button class="result-btn primary-btn" on:click={() => openLink(scannedResult)}>OPEN LINK</button>
+            {#if scannedResultCanOpen}
+              <button class="result-btn primary-btn" on:click={() => openLink(scannedResult)}>OPEN</button>
+            {/if}
             <button class="result-btn secondary-btn" on:click={() => copyText(scannedResult)}>COPY TEXT</button>
-            <button class="result-btn cancel-btn" on:click={() => scannedResult = ''}>CLEAR</button>
+            <button class="result-btn cancel-btn" on:click={() => { scannedResult = ""; scannedFormat = ""; scannedKind = ""; }}>CLEAR</button>
           </div>
         </fieldset>
       {/if}
@@ -1091,14 +1305,43 @@
           <input type="text" bind:value={waPhone} placeholder="WhatsApp Phone (incl. Country Code)" />
           <textarea bind:value={waMsg} placeholder="Pre-filled Message (Optional)" rows="2" class="text-area"></textarea>
         {:else if dataType === "Crypto"}
-          <div class="row split">
+          <input type="text" bind:value={walletName} placeholder="Wallet Profile Name" />
+          <div class="row split wallet-row">
             <select bind:value={cryptoType} class="outline-select">
               <option value="bitcoin">Bitcoin (BTC)</option>
               <option value="ethereum">Ethereum (ETH)</option>
               <option value="litecoin">Litecoin (LTC)</option>
+              <option value="dogecoin">Dogecoin (DOGE)</option>
+              <option value="solana">Solana (SOL)</option>
             </select>
             <input type="text" bind:value={cryptoAddr} placeholder="Wallet Address" />
           </div>
+          <div class="row split wallet-row">
+            <input type="text" bind:value={cryptoAmount} placeholder="Amount (Optional)" />
+            <input type="text" bind:value={cryptoLabel} placeholder="Label / Recipient" />
+          </div>
+          <textarea bind:value={cryptoMessage} placeholder="Message or memo (optional)" rows="2" class="text-area"></textarea>
+          <div class="wallet-toolbar">
+            <button class="wallet-btn wallet-save-btn" type="button" on:click={saveCurrentWalletProfile}>SAVE WALLET PROFILE</button>
+            <div class="wallet-payload-preview">{buildCryptoPayload()}</div>
+          </div>
+          {#if savedWallets.length}
+            <div class="sub-panel wallet-library">
+              <p class="sub-label">Saved Wallets</p>
+              {#each savedWallets as wallet (wallet.id)}
+                <div class="wallet-card">
+                  <div class="wallet-card-copy">
+                    <strong>{wallet.name}</strong>
+                    <div class="wallet-meta">{toDisplayCase(wallet.network)} • {wallet.address}</div>
+                  </div>
+                  <div class="wallet-card-actions">
+                    <button class="wallet-btn" type="button" on:click={() => loadWalletProfile(wallet)}>LOAD</button>
+                    <button class="wallet-btn wallet-delete-btn" type="button" on:click={() => deleteWalletProfile(wallet.id)}>DELETE</button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
         {:else if dataType === "Event"}
           <input type="text" bind:value={eventTitle} placeholder="Event Title / Summary" />
           <div class="row split">
@@ -1444,12 +1687,22 @@
 
   .scrolling-content { padding: 15px; padding-bottom: 40px; display: flex; flex-direction: column; gap: 15px; }
 
-  .scanner-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 80px 20px; background: rgba(0, 0, 0, 0.4); z-index: 9999; }
+  .scanner-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 56px 20px 42px; background: radial-gradient(circle at center, rgba(0,0,0,0.16) 0, rgba(0,0,0,0.16) 18%, rgba(0,0,0,0.62) 65%, rgba(0,0,0,0.78) 100%); z-index: 9999; }
   .scanner-header h2 { color: #00FF00; font-size: 2rem; margin: 0 0 10px 0; text-shadow: 0 4px 6px rgba(0,0,0,0.9); text-align: center; }
   .scanner-header p { color: white; font-size: 1.1rem; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.9); text-align: center; }
+  .scanner-stage { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; }
+  .scanner-target { position: relative; width: min(78vw, 320px); aspect-ratio: 1 / 1; border: 2px solid rgba(255,255,255,0.22); border-radius: 24px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.24); backdrop-filter: blur(1px); overflow: hidden; }
+  .scanner-corner { position: absolute; width: 42px; height: 42px; border-color: #00ff88; border-style: solid; filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.75)); }
+  .scanner-corner.top-left { top: -2px; left: -2px; border-width: 5px 0 0 5px; border-top-left-radius: 20px; }
+  .scanner-corner.top-right { top: -2px; right: -2px; border-width: 5px 5px 0 0; border-top-right-radius: 20px; }
+  .scanner-corner.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 5px 5px; border-bottom-left-radius: 20px; }
+  .scanner-corner.bottom-right { bottom: -2px; right: -2px; border-width: 0 5px 5px 0; border-bottom-right-radius: 20px; }
+  .scanner-line { position: absolute; left: 7%; right: 7%; height: 3px; border-radius: 999px; background: linear-gradient(90deg, rgba(255,0,0,0), #ff3b30 20%, #ff6a6a 50%, #ff3b30 80%, rgba(255,0,0,0)); box-shadow: 0 0 18px rgba(255, 59, 48, 0.95); animation: scan-sweep 2.2s ease-in-out infinite; }
+  .scanner-caption { color: #f5f7fa; font-size: 0.95rem; text-align: center; max-width: 290px; line-height: 1.4; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
 
   .result-panel { border-color: #00FF7F; background: #0d1a12; box-shadow: 0 0 15px rgba(0, 255, 127, 0.1); }
   .result-legend { color: #00FF7F; font-weight: 900; text-shadow: 0 0 5px rgba(0, 255, 127, 0.5); }
+  .scan-meta { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8fd7ac; }
   .scanned-text-box { background: #000; color: #fff; padding: 12px; border-radius: 8px; font-family: monospace; word-break: break-all; border: 1px solid #224422; margin-bottom: 12px; }
   .result-actions { display: flex; gap: 8px; }
   .result-btn { flex: 1; padding: 12px 5px; border-radius: 8px; font-weight: bold; font-size: 0.85rem; border: none; cursor: pointer; }
@@ -1486,6 +1739,17 @@
   .sub-panel { background-color: #111115; border-radius: 8px; padding: 12px; margin-top: 15px; }
   .sub-label { font-size: 0.8rem; color: #888; margin: 0 0 10px 0; }
   .sub-note { margin: 10px 0 0 0; color: #93a4b8; font-size: 0.84rem; line-height: 1.4; }
+  .wallet-row { align-items: stretch; }
+  .wallet-toolbar { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .wallet-btn { border: 1px solid #35506b; background: #1d2d3d; color: #fff; padding: 10px 14px; border-radius: 10px; font-weight: 800; cursor: pointer; }
+  .wallet-save-btn { background: linear-gradient(135deg, #154b7d 0%, #1ba784 100%); border-color: transparent; }
+  .wallet-delete-btn { background: #3c2024; border-color: #6a3038; }
+  .wallet-payload-preview { background: #10141a; border: 1px dashed #36506b; color: #90e0ff; border-radius: 10px; padding: 12px; font-family: monospace; font-size: 0.8rem; word-break: break-all; }
+  .wallet-library { display: flex; flex-direction: column; gap: 10px; }
+  .wallet-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; background: #0d1117; border: 1px solid #243446; border-radius: 10px; }
+  .wallet-card-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .wallet-meta { font-size: 0.8rem; color: #95a8bc; word-break: break-all; }
+  .wallet-card-actions { display: flex; gap: 8px; }
   .swatch-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
   .swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; cursor: pointer; }
   
@@ -1677,6 +1941,33 @@
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes scan-sweep {
+    0% { top: 12%; }
+    50% { top: calc(100% - 12% - 3px); }
+    100% { top: 12%; }
+  }
+
+  @media (max-width: 520px) {
+    .result-actions,
+    .row.split,
+    .wallet-card {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .wallet-card-actions {
+      width: 100%;
+    }
+
+    .wallet-card-actions .wallet-btn {
+      flex: 1;
+    }
+
+    .scanner-target {
+      width: min(82vw, 300px);
     }
   }
 
