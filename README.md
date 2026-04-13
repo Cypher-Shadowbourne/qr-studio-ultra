@@ -10,7 +10,7 @@ QR Studio Ultra is a privacy-first QR and barcode studio built with Svelte, Taur
 
 It is designed for people who want more than a basic black-and-white QR utility. The app focuses on polished visual output, practical payload generation, offline use, and native-quality exports without sending data to outside services.
 
-> Latest Android builds in this repo include `QR-Studio-Ultra-Final.apk` and `QR-Studio-Ultra-Final-armv7.apk`.
+> Android build artifacts are kept outside the repo. The source here is the canonical project state.
 
 ## Screenshots
 
@@ -45,8 +45,7 @@ Current packaged Android builds in this workspace:
 
 | Build | Best for |
 | --- | --- |
-| `QR-Studio-Ultra-Final.apk` | newer Android devices |
-| `QR-Studio-Ultra-Final-armv7.apk` | older `armeabi-v7a` devices |
+| external Android package export | device testing and release sharing |
 
 Desktop development runs through Tauri with:
 

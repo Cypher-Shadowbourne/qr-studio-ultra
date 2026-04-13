@@ -26,6 +26,9 @@ local.properties
 gradle
 /android/app/build
 /android/build
+/src-tauri/gen/android/app/build/
+QR-Studio-Ultra-Final.apk
+QR-Studio-Ultra-Final-armv7.apk
 QR-Studio-Ultra-Dev.apk
 QR-Studio-Ultra-Dev.aab
 QR-Studio-Ultra-Release.apk
