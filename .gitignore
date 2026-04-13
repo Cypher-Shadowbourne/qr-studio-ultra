@@ -26,6 +26,14 @@ local.properties
 gradle
 /android/app/build
 /android/build
+QR-Studio-Ultra-Dev.apk
+QR-Studio-Ultra-Dev.aab
+QR-Studio-Ultra-Release.apk
+QR-Studio-Ultra-Release.aab
+
+# Local screenshot dumps
+docs/screenshots/Screenshot_*.png
+docs/screenshots/QR_Studio_*.png
 
 # Editor settings
 .idea

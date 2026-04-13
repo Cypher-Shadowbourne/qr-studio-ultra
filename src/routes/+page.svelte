@@ -76,6 +76,9 @@
   let fillType = "Solid";
   let color1 = "#000000";
   let color2 = "#1a73e8";
+  let color3 = "#ff416c";
+  let color4 = "#ffd166";
+  let useFourthStop = true;
   let bgColor = "#FFFFFF";
 
   // Eyes
@@ -88,6 +91,12 @@
   let frameText = "Scan Me";
   let ringStyle = "solid";
   let ringColor = "#4A2B15";
+  let ringColor2 = "#8b5e3c";
+  let ringColor3 = "#e6a756";
+  let ringColor4 = "#ffd166";
+  let ringUseFourthStop = true;
+  let ringGradientMode = "match-main";
+  let ringColorMode = "solid";
   let frameTextColor = "#4A2B15";
   let transparentTextBg = false;
   let transparentFrameBg = false;
@@ -95,12 +104,20 @@
   let centerOverlayMode = "none";
   let centerOverlayStyle = "solid";
   let centerOverlayColor = "#4A2B15";
+  let centerOverlayColor2 = "#8b5e3c";
+  let centerOverlayColor3 = "#e6a756";
+  let centerOverlayColor4 = "#ffd166";
+  let centerOverlayUseFourthStop = true;
+  let centerOverlayGradientMode = "match-outer";
+  let centerOverlayColorMode = "solid";
   const baseQrCanvasSize = 600;
-  const baseLogoRatio = 0.22;
+  let logoSizePercent = 22;
+  let logoOpacityPercent = 100;
 
   let logoBase64: string | null = null;
   let logoName = "";
   let fileInput: HTMLInputElement;
+  let fallbackColorInput: HTMLInputElement;
 
   // Render variables
   let qrImagePng = ""; 
@@ -126,6 +143,8 @@
   let scannedResultCanOpen = false;
   let showDogTagWarning = false; 
   let savedWallets: SavedWallet[] = [];
+  let activeColorTarget = "color1";
+  let recentColors: string[] = [];
 
   // --- NEW: Interactive Crop State ---
   let showCropModal = false;
@@ -149,14 +168,27 @@
   ];
 
   const gradientPresets = [
-    { name: "Sunset", c1: "#FF512F", c2: "#DD2476" },
-    { name: "Ocean", c1: "#2193b0", c2: "#6dd5ed" },
-    { name: "Forest", c1: "#11998e", c2: "#38ef7d" },
-    { name: "Cyber", c1: "#f12711", c2: "#f5af19" },
-    { name: "Coffee", c1: "#4A2B15", c2: "#2E1A0C" },
-    { name: "Lava", c1: "#FF416C", c2: "#FF4B2B" },
-    { name: "Midnight", c1: "#232526", c2: "#414345" },
-    { name: "Berry", c1: "#8E2DE2", c2: "#4A00E0" }
+    { name: "Sunset", c1: "#4b134f", c2: "#ff5f6d", c3: "#ffe082" },
+    { name: "Ocean", c1: "#0f2027", c2: "#2c5364", c3: "#6dd5ed" },
+    { name: "Forest", c1: "#0b3d2e", c2: "#11998e", c3: "#9be15d" },
+    { name: "Cyber", c1: "#1a0f3d", c2: "#7b2ff7", c3: "#00f2fe" },
+    { name: "Coffee", c1: "#1f130f", c2: "#6f4e37", c3: "#c7905b" },
+    { name: "Lava", c1: "#3b0a0a", c2: "#ff416c", c3: "#ffb347" },
+    { name: "Midnight", c1: "#0b1020", c2: "#232526", c3: "#6a82fb" },
+    { name: "Berry", c1: "#2b0f54", c2: "#8e2de2", c3: "#ff4ecd" },
+    { name: "Obsidian Rose", c1: "#0f0c29", c2: "#302b63", c3: "#ff416c" },
+    { name: "Velvet Night", c1: "#1a1a2e", c2: "#16213e", c3: "#0f3460" },
+    { name: "Deep Wine", c1: "#2b0f1c", c2: "#5a1e36", c3: "#a83279" },
+    { name: "Silk Blue", c1: "#1f2a38", c2: "#2c3e50", c3: "#4ca1af" },
+    { name: "Muted Gold", c1: "#232526", c2: "#6f625d", c3: "#b79891" },
+    { name: "Ash Fade", c1: "#1f1c2c", c2: "#4a445f", c3: "#928dab" },
+    { name: "Neon Pulse", c1: "#0f2027", c2: "#2c5364", c3: "#00f2fe" },
+    { name: "Ultraviolet", c1: "#240b36", c2: "#6a1b75", c3: "#c31432" },
+    { name: "Digital Aurora", c1: "#141e30", c2: "#243b55", c3: "#00c6ff" },
+    { name: "Burnt Amber", c1: "#2c1b0f", c2: "#8b5e3c", c3: "#e6a756" },
+    { name: "Soft Sunset", c1: "#3a1c71", c2: "#d76d77", c3: "#ffaf7b" },
+    { name: "Graphite", c1: "#101214", c2: "#232526", c3: "#414345" },
+    { name: "Steel Fade", c1: "#1f2731", c2: "#485563", c3: "#7d8fa1" }
   ];
   const walletStorageKey = "qr-studio-ultra.wallets";
   const scannerFormats = Object.values(Format);
@@ -166,7 +198,222 @@
   });
 
   function applySolid(c: string) { color1 = c; fillType = "Solid"; }
-  function applyGradient(c1: string, c2: string) { color1 = c1; color2 = c2; fillType = "Linear"; }
+  function applyGradient(c1: string, c2: string, c3?: string) {
+    color1 = c1;
+    color2 = c2;
+    color3 = c3 ?? c2;
+    color4 = c3 ?? c2;
+    useFourthStop = true;
+    fillType = "Linear";
+  }
+
+  function getGradientPalette(
+    c1: string,
+    c2: string,
+    c3?: string,
+    c4?: string,
+    useFourth = false
+  ) {
+    return {
+      c1,
+      c2,
+      c3: c3 ?? c2,
+      c4: useFourth ? (c4 ?? c3 ?? c2) : undefined
+    };
+  }
+
+  function applyGradientStops(
+    gradient: CanvasGradient,
+    c1: string,
+    c2: string,
+    c3?: string,
+    c4?: string,
+    useFourth = false
+  ) {
+    gradient.addColorStop(0, c1);
+    if (useFourth && c4) {
+      gradient.addColorStop(0.33, c2);
+      gradient.addColorStop(0.66, c3 ?? c2);
+      gradient.addColorStop(1, c4);
+    } else if (c3) {
+      gradient.addColorStop(0.5, c2);
+      gradient.addColorStop(1, c3);
+    } else {
+      gradient.addColorStop(1, c2);
+    }
+  }
+
+  function gradientPreviewCss(c1: string, c2: string, c3?: string, c4?: string, useFourth = false) {
+    return useFourth && c4
+      ? `linear-gradient(135deg, ${c1} 0%, ${c2} 33%, ${c3 ?? c2} 66%, ${c4} 100%)`
+      : c3
+        ? `linear-gradient(135deg, ${c1} 0%, ${c2} 50%, ${c3} 100%)`
+        : `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
+  }
+
+  function setActiveColorValue(value: string) {
+    switch (activeColorTarget) {
+      case "color1": color1 = value; break;
+      case "color2": color2 = value; break;
+      case "color3": color3 = value; break;
+      case "color4": color4 = value; break;
+      case "bgColor": bgColor = value; break;
+      case "eyeOut": eyeOut = value; break;
+      case "eyeIn": eyeIn = value; break;
+      case "ringColor": ringColor = value; break;
+      case "ringColor2": ringColor2 = value; break;
+      case "ringColor3": ringColor3 = value; break;
+      case "ringColor4": ringColor4 = value; break;
+      case "frameTextColor": frameTextColor = value; break;
+      case "centerOverlayColor": centerOverlayColor = value; break;
+      case "centerOverlayColor2": centerOverlayColor2 = value; break;
+      case "centerOverlayColor3": centerOverlayColor3 = value; break;
+      case "centerOverlayColor4": centerOverlayColor4 = value; break;
+    }
+  }
+
+  function getActiveColorValue() {
+    switch (activeColorTarget) {
+      case "color1": return color1;
+      case "color2": return color2;
+      case "color3": return color3;
+      case "color4": return color4;
+      case "bgColor": return bgColor;
+      case "eyeOut": return eyeOut;
+      case "eyeIn": return eyeIn;
+      case "ringColor": return ringColor;
+      case "ringColor2": return ringColor2;
+      case "ringColor3": return ringColor3;
+      case "ringColor4": return ringColor4;
+      case "frameTextColor": return frameTextColor;
+      case "centerOverlayColor": return centerOverlayColor;
+      case "centerOverlayColor2": return centerOverlayColor2;
+      case "centerOverlayColor3": return centerOverlayColor3;
+      case "centerOverlayColor4": return centerOverlayColor4;
+      default: return color1;
+    }
+  }
+
+  function getColorValueByTarget(target: string) {
+    switch (target) {
+      case "color1": return color1;
+      case "color2": return color2;
+      case "color3": return color3;
+      case "color4": return color4;
+      case "bgColor": return bgColor;
+      case "eyeOut": return eyeOut;
+      case "eyeIn": return eyeIn;
+      case "ringColor": return ringColor;
+      case "ringColor2": return ringColor2;
+      case "ringColor3": return ringColor3;
+      case "ringColor4": return ringColor4;
+      case "frameTextColor": return frameTextColor;
+      case "centerOverlayColor": return centerOverlayColor;
+      case "centerOverlayColor2": return centerOverlayColor2;
+      case "centerOverlayColor3": return centerOverlayColor3;
+      case "centerOverlayColor4": return centerOverlayColor4;
+      default: return color1;
+    }
+  }
+
+  function rememberColor(value: string) {
+    recentColors = [value, ...recentColors.filter((entry) => entry !== value)].slice(0, 12);
+  }
+
+  function normalizeHexColor(value: string) {
+    const raw = value.trim();
+    if (!raw) return null;
+    const normalized = raw.startsWith("#") ? raw : `#${raw}`;
+    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) return normalized.toUpperCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(normalized)) {
+      const expanded = normalized
+        .slice(1)
+        .split("")
+        .map((char) => `${char}${char}`)
+        .join("");
+      return `#${expanded}`.toUpperCase();
+    }
+    return null;
+  }
+
+  function updateColorTarget(target: string, value: string) {
+    activeColorTarget = target;
+    const normalized = normalizeHexColor(value);
+    if (!normalized) return;
+    setActiveColorValue(normalized);
+    rememberColor(normalized);
+  }
+
+  function onStudioColorInput(event: Event) {
+    const value = (event.currentTarget as HTMLInputElement).value;
+    updateColorTarget(activeColorTarget, value);
+  }
+
+  function openNativePicker(target: string) {
+    activeColorTarget = target;
+    if (!fallbackColorInput) return;
+    fallbackColorInput.value = normalizeHexColor(getActiveColorValue()) ?? "#000000";
+    fallbackColorInput.click();
+  }
+
+  async function pickFromScreen(target = activeColorTarget) {
+    const picker = (window as Window & { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+    if (!picker) {
+      openNativePicker(target);
+      return;
+    }
+
+    try {
+      const eyeDropper = new picker();
+      const result = await eyeDropper.open();
+      updateColorTarget(target, result.sRGBHex);
+    } catch {
+      openNativePicker(target);
+    }
+  }
+
+  async function pickColorInto(target: string) {
+    activeColorTarget = target;
+    openNativePicker(target);
+  }
+
+  function applyColorChip(target: string, value: string) {
+    updateColorTarget(target, value);
+  }
+
+  function onHexBlur(target: string, event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const normalized = normalizeHexColor(input.value);
+    if (normalized) {
+      updateColorTarget(target, normalized);
+      input.value = normalized;
+    } else {
+      input.value = getColorValueByTarget(target);
+      showSaveToastMessage("Enter a valid hex color like #1A73E8.", "error");
+    }
+  }
+
+  function getRingPalette() {
+    return ringGradientMode === "match-main"
+      ? getGradientPalette(color1, color2, color3, color4, useFourthStop)
+      : getGradientPalette(ringColor, ringColor2, ringColor3, ringColor4, ringUseFourthStop);
+  }
+
+  function getCenterOverlayPalette() {
+    if (centerOverlayGradientMode === "match-main") {
+      return getGradientPalette(color1, color2, color3, color4, useFourthStop);
+    }
+    if (centerOverlayGradientMode === "match-outer") {
+      return getRingPalette();
+    }
+    return getGradientPalette(
+      centerOverlayColor,
+      centerOverlayColor2,
+      centerOverlayColor3,
+      centerOverlayColor4,
+      centerOverlayUseFourthStop
+    );
+  }
 
   function triggerFileInput() { if (fileInput) fileInput.click(); }
   
@@ -696,6 +943,8 @@
           data: finalData,
           color1: color1,
           color2: color2,
+          color3: color3,
+          color4: useFourthStop ? color4 : undefined,
           bgColor: bgColor,
           eyeOut: eyeOut,
           eyeIn: eyeIn,
@@ -703,7 +952,9 @@
           mainShape: mainShape,
           bgShape: bgShape,
           eyeShape: eyeShape,
-          logoB64: logoBase64
+          logoB64: logoBase64,
+          logoSize: logoSizePercent,
+          logoOpacity: logoOpacityPercent
         }
       });
 
@@ -756,7 +1007,9 @@
           cx: number,
           cy: number,
           size: number,
-          color: string
+          color: string,
+          palette?: { c1: string; c2: string; c3?: string; c4?: string },
+          useGradientColor = false
         ) => {
           if (style === "none") return;
 
@@ -764,10 +1017,17 @@
           c.strokeStyle = color;
           c.fillStyle = color;
 
-          if (style === "gradient") {
+          if (style === "gradient" || useGradientColor) {
             const grad = c.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
-            grad.addColorStop(0, color1);
-            grad.addColorStop(1, color2);
+            const gradientPalette = palette ?? getGradientPalette(color1, color2, color3, color4, useFourthStop);
+            applyGradientStops(
+              grad,
+              gradientPalette.c1,
+              gradientPalette.c2,
+              gradientPalette.c3,
+              gradientPalette.c4,
+              Boolean(gradientPalette.c4)
+            );
             c.strokeStyle = grad;
             c.fillStyle = grad;
           }
@@ -848,12 +1108,16 @@
           if (centerOverlayMode === "match" && !enableFrame) return;
           const overlayStyle = centerOverlayMode === "match" && enableFrame ? ringStyle : centerOverlayStyle;
           const overlayColor = centerOverlayMode === "match" && enableFrame ? ringColor : centerOverlayColor;
+          const overlayPalette = centerOverlayMode === "match" && enableFrame ? getRingPalette() : getCenterOverlayPalette();
+          const overlayUsesGradient = centerOverlayMode === "match" && enableFrame
+            ? (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")
+            : (centerOverlayStyle !== "solid" && centerOverlayStyle !== "none" && centerOverlayColorMode === "gradient");
           if (overlayStyle === "none") return;
-          drawRingDecoration(c, overlayStyle, bgShape, canvas.width / 2, canvas.height / 2, size, overlayColor);
+          drawRingDecoration(c, overlayStyle, bgShape, canvas.width / 2, canvas.height / 2, size, overlayColor, overlayPalette, overlayUsesGradient);
         };
 
         const getCenterOverlaySize = (renderedQrSize: number) => {
-          const logoRenderedSize = renderedQrSize * baseLogoRatio;
+          const logoRenderedSize = renderedQrSize * (logoSizePercent / 100);
           return Math.max(24, logoRenderedSize - Math.max(2, logoRenderedSize * 0.02));
         };
 
@@ -871,7 +1135,17 @@
           }
           
           // Draw the Ring Frame
-          drawRingDecoration(ctx, ringStyle, bgShape, 400, 400, 700, ringColor);
+          drawRingDecoration(
+            ctx,
+            ringStyle,
+            bgShape,
+            400,
+            400,
+            700,
+            ringColor,
+            getRingPalette(),
+            ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient"
+          );
 
           ctx.save();
           drawShapePath(ctx, bgShape, 400, 400, 660);
@@ -897,7 +1171,6 @@
             const badgeWidth = textWidth + 80;
             const badgeHeight = 70;
             
-            // Adjust badge position for different shapes
             let badgeY = 675;
             if (bgShape === "diamond") badgeY = 630;
             else if (bgShape === "octagon") badgeY = 660;
@@ -912,7 +1185,6 @@
               // Draw badge background
               const bx = 400 - badgeWidth / 2;
               const by = badgeY - badgeHeight / 2;
-              
               if (matchTextStyle && (ringStyle === "rounded" || bgShape === "rounded")) {
                 const r = 15;
                 ctx.beginPath();
@@ -962,10 +1234,10 @@
             
             // Text color logic
             if (matchTextStyle) {
-              if (ringStyle === "gradient") {
+              if (ringStyle === "gradient" || (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")) {
                 const grad = ctx.createLinearGradient(400 - textWidth/2, 0, 400 + textWidth/2, 0);
-                grad.addColorStop(0, color1);
-                grad.addColorStop(1, color2);
+                const ringPalette = getRingPalette();
+                applyGradientStops(grad, ringPalette.c1, ringPalette.c2, ringPalette.c3, ringPalette.c4, Boolean(ringPalette.c4));
                 ctx.fillStyle = grad;
               } else if (ringStyle === "neon") {
                 ctx.fillStyle = "#FFFFFF";
@@ -1103,6 +1375,15 @@
 </script>
 
 <main class="mobile-app">
+  <input
+    bind:this={fallbackColorInput}
+    type="color"
+    value={getActiveColorValue()}
+    on:input={onStudioColorInput}
+    class="native-color-proxy"
+    aria-hidden="true"
+    tabindex="-1"
+  />
   {#if isScanning}
     <div class="scanner-overlay">
       <div class="scanner-header">
@@ -1398,19 +1679,28 @@
         </div>
         
         <div class="row split color-row mt-10">
-          <label>Main <input type="color" bind:value={color1} /> <input type="text" bind:value={color1} class="hex-input"/></label>
-          <label>End <input type="color" bind:value={color2} /> <input type="text" bind:value={color2} class="hex-input"/></label>
+          <label>Main <input type="color" bind:value={color1} /> <input type="text" bind:value={color1} class="hex-input" on:blur={(event) => onHexBlur('color1', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('color1')}>Pick</button></label>
+          <label>Mid <input type="color" bind:value={color2} /> <input type="text" bind:value={color2} class="hex-input" on:blur={(event) => onHexBlur('color2', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('color2')}>Pick</button></label>
+          <label>End <input type="color" bind:value={color3} /> <input type="text" bind:value={color3} class="hex-input" on:blur={(event) => onHexBlur('color3', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('color3')}>Pick</button></label>
         </div>
+        <label class="checkbox-label" style="font-size: 0.85rem; margin: 10px 0 8px;">
+          <input type="checkbox" bind:checked={useFourthStop} /> 4th Gradient Stop
+        </label>
+        {#if useFourthStop}
+          <div class="row color-row">
+            <label>Accent <input type="color" bind:value={color4} /> <input type="text" bind:value={color4} class="hex-input" on:blur={(event) => onHexBlur('color4', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('color4')}>Pick</button></label>
+          </div>
+        {/if}
         
         <div class="row color-row mt-10">
-          <label>BG <input type="color" bind:value={bgColor} /> <input type="text" bind:value={bgColor} class="hex-input"/></label>
+          <label>BG <input type="color" bind:value={bgColor} /> <input type="text" bind:value={bgColor} class="hex-input" on:blur={(event) => onHexBlur('bgColor', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('bgColor')}>Pick</button></label>
         </div>
 
         <div class="sub-panel">
           <p class="sub-label">Solid Colors</p>
           <div class="swatch-grid">
             {#each solidColors as color}
-              <button class="swatch" style="background: {color};" on:click={() => applySolid(color)} aria-label={color}></button>
+              <button class="swatch" type="button" style="background: {color};" on:click={() => applySolid(color)} aria-label={color}></button>
             {/each}
           </div>
         </div>
@@ -1419,11 +1709,23 @@
           <p class="sub-label">Gradients</p>
           <div class="preset-grid">
             {#each gradientPresets as preset}
-              <button class="preset-btn" style="background: linear-gradient(to right, {preset.c1}, {preset.c2});" on:click={() => applyGradient(preset.c1, preset.c2)}>
+              <button class="preset-btn" type="button" style="background: {gradientPreviewCss(preset.c1, preset.c2, preset.c3)};" on:click={() => applyGradient(preset.c1, preset.c2, preset.c3)}>
                 {preset.name}
               </button>
             {/each}
           </div>
+        </div>
+
+        <div class="sub-panel">
+          <p class="sub-label">Quick Pick</p>
+          <p class="sub-note">Use any `Pick` button first, then tap a recent color here to reuse it on that field.</p>
+          {#if recentColors.length}
+            <div class="studio-swatches">
+              {#each recentColors as color}
+                <button class="swatch" type="button" style="background: {color};" on:click={() => applyColorChip(activeColorTarget, color)} aria-label={color}></button>
+              {/each}
+            </div>
+          {/if}
         </div>
       </fieldset>
 
@@ -1436,8 +1738,8 @@
           <option value="rounded">Rounded Eyes</option>
         </select>
         <div class="row split color-row mt-10">
-          <label>Outer <input type="color" bind:value={eyeOut} /> <input type="text" bind:value={eyeOut} class="hex-input"/></label>
-          <label>Inner <input type="color" bind:value={eyeIn} /> <input type="text" bind:value={eyeIn} class="hex-input"/></label>
+          <label>Outer <input type="color" bind:value={eyeOut} /> <input type="text" bind:value={eyeOut} class="hex-input" on:blur={(event) => onHexBlur('eyeOut', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('eyeOut')}>Pick</button></label>
+          <label>Inner <input type="color" bind:value={eyeIn} /> <input type="text" bind:value={eyeIn} class="hex-input" on:blur={(event) => onHexBlur('eyeIn', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('eyeIn')}>Pick</button></label>
         </div>
       </fieldset>
 
@@ -1474,8 +1776,34 @@
           </select>
         </div>
         <div class="row split color-row mt-10">
-          <label>Ring <input type="color" bind:value={ringColor} disabled={!enableFrame}/> <input type="text" bind:value={ringColor} class="hex-input" disabled={!enableFrame}/></label>
-          <label>Text <input type="color" bind:value={frameTextColor} disabled={!enableFrame}/> <input type="text" bind:value={frameTextColor} class="hex-input" disabled={!enableFrame}/></label>
+          <label>Ring <input type="color" bind:value={ringColor} disabled={!enableFrame}/> <input type="text" bind:value={ringColor} class="hex-input" on:blur={(event) => onHexBlur('ringColor', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor')} disabled={!enableFrame}>Pick</button></label>
+          <label>Text <input type="color" bind:value={frameTextColor} disabled={!enableFrame}/> <input type="text" bind:value={frameTextColor} class="hex-input" on:blur={(event) => onHexBlur('frameTextColor', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('frameTextColor')} disabled={!enableFrame}>Pick</button></label>
+        </div>
+        <div class="sub-panel mt-10">
+          <p class="sub-label">Overlay Gradient</p>
+          <select bind:value={ringColorMode} disabled={!enableFrame || ringStyle === "none" || ringStyle === "solid"} class="full-width">
+            <option value="solid">Use Solid Ring Color</option>
+            <option value="gradient">Use Gradient Colors</option>
+          </select>
+          <select bind:value={ringGradientMode} disabled={!enableFrame || ringStyle === "none" || ringStyle === "solid" || ringColorMode !== "gradient"} class="full-width mt-10">
+            <option value="match-main">Match Main QR Gradient</option>
+            <option value="custom">Custom Overlay Gradient</option>
+          </select>
+          {#if ringStyle !== "none" && ringStyle !== "solid" && ringColorMode === "gradient" && ringGradientMode === "custom"}
+            <div class="row split color-row mt-10">
+              <label>Main <input type="color" bind:value={ringColor} disabled={!enableFrame}/> <input type="text" bind:value={ringColor} class="hex-input" on:blur={(event) => onHexBlur('ringColor', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor')} disabled={!enableFrame}>Pick</button></label>
+              <label>Mid <input type="color" bind:value={ringColor2} disabled={!enableFrame}/> <input type="text" bind:value={ringColor2} class="hex-input" on:blur={(event) => onHexBlur('ringColor2', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor2')} disabled={!enableFrame}>Pick</button></label>
+              <label>End <input type="color" bind:value={ringColor3} disabled={!enableFrame}/> <input type="text" bind:value={ringColor3} class="hex-input" on:blur={(event) => onHexBlur('ringColor3', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor3')} disabled={!enableFrame}>Pick</button></label>
+            </div>
+            <label class="checkbox-label" style="font-size: 0.85rem; margin: 10px 0 8px;">
+              <input type="checkbox" bind:checked={ringUseFourthStop} disabled={!enableFrame} /> 4th Overlay Stop
+            </label>
+            {#if ringUseFourthStop}
+              <div class="row color-row">
+                <label>Accent <input type="color" bind:value={ringColor4} disabled={!enableFrame}/> <input type="text" bind:value={ringColor4} class="hex-input" on:blur={(event) => onHexBlur('ringColor4', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor4')} disabled={!enableFrame}>Pick</button></label>
+              </div>
+            {/if}
+          {/if}
         </div>
       </fieldset>
 
@@ -1484,6 +1812,20 @@
         <button class="upload-btn" on:click={triggerFileInput} class:has-logo={logoName !== ""}>
           {logoName !== "" ? `Logo Loaded: ${logoName}` : "Upload Center Logo"}
         </button>
+        <div class="sub-panel mt-10">
+          <p class="sub-label">Logo Controls</p>
+          <label>
+            Size
+            <input type="range" min="10" max="36" step="1" bind:value={logoSizePercent} disabled={!logoBase64} />
+            <span class="range-value">{logoSizePercent}%</span>
+          </label>
+          <label class="mt-10">
+            Opacity
+            <input type="range" min="15" max="100" step="1" bind:value={logoOpacityPercent} disabled={!logoBase64} />
+            <span class="range-value">{logoOpacityPercent}%</span>
+          </label>
+          <p class="sub-note">Bigger logos look strong, but staying under about 30% keeps scanning safer.</p>
+        </div>
         <div class="sub-panel mt-10">
           <p class="sub-label">Center Photo Overlay</p>
           <select bind:value={centerOverlayMode} class="full-width" disabled={!logoBase64}>
@@ -1504,9 +1846,34 @@
                 <option value="neon">Neon Glow Ring</option>
               </select>
             </div>
-            <div class="row split color-row mt-10">
-              <label>Inner Ring <input type="color" bind:value={centerOverlayColor} disabled={!logoBase64}/> <input type="text" bind:value={centerOverlayColor} class="hex-input" disabled={!logoBase64}/></label>
-            </div>
+            <select bind:value={centerOverlayColorMode} class="full-width mt-10" disabled={!logoBase64 || centerOverlayStyle === "none" || centerOverlayStyle === "solid"}>
+              <option value="solid">Use Solid Inner Color</option>
+              <option value="gradient">Use Gradient Colors</option>
+            </select>
+            <select bind:value={centerOverlayGradientMode} class="full-width mt-10" disabled={!logoBase64 || centerOverlayStyle === "none" || centerOverlayStyle === "solid" || centerOverlayColorMode !== "gradient"}>
+              <option value="match-outer">Match Outer Overlay</option>
+              <option value="match-main">Match Main QR Gradient</option>
+              <option value="custom">Custom Inner Gradient</option>
+            </select>
+            {#if centerOverlayStyle === "solid" || centerOverlayColorMode === "solid" || centerOverlayGradientMode === "custom"}
+              <div class="row split color-row mt-10">
+                <label>Inner Ring <input type="color" bind:value={centerOverlayColor} disabled={!logoBase64}/> <input type="text" bind:value={centerOverlayColor} class="hex-input" on:blur={(event) => onHexBlur('centerOverlayColor', event)} disabled={!logoBase64}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('centerOverlayColor')} disabled={!logoBase64}>Pick</button></label>
+                {#if centerOverlayStyle !== "solid" && centerOverlayColorMode === "gradient" && centerOverlayGradientMode === "custom"}
+                  <label>Mid <input type="color" bind:value={centerOverlayColor2} disabled={!logoBase64}/> <input type="text" bind:value={centerOverlayColor2} class="hex-input" on:blur={(event) => onHexBlur('centerOverlayColor2', event)} disabled={!logoBase64}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('centerOverlayColor2')} disabled={!logoBase64}>Pick</button></label>
+                  <label>End <input type="color" bind:value={centerOverlayColor3} disabled={!logoBase64}/> <input type="text" bind:value={centerOverlayColor3} class="hex-input" on:blur={(event) => onHexBlur('centerOverlayColor3', event)} disabled={!logoBase64}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('centerOverlayColor3')} disabled={!logoBase64}>Pick</button></label>
+                {/if}
+              </div>
+              {#if centerOverlayStyle !== "solid" && centerOverlayColorMode === "gradient" && centerOverlayGradientMode === "custom"}
+                <label class="checkbox-label" style="font-size: 0.85rem; margin: 10px 0 8px;">
+                  <input type="checkbox" bind:checked={centerOverlayUseFourthStop} disabled={!logoBase64} /> 4th Inner Stop
+                </label>
+                {#if centerOverlayUseFourthStop}
+                  <div class="row color-row">
+                    <label>Accent <input type="color" bind:value={centerOverlayColor4} disabled={!logoBase64}/> <input type="text" bind:value={centerOverlayColor4} class="hex-input" on:blur={(event) => onHexBlur('centerOverlayColor4', event)} disabled={!logoBase64}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('centerOverlayColor4')} disabled={!logoBase64}>Pick</button></label>
+                  </div>
+                {/if}
+              {/if}
+            {/if}
           {/if}
           {#if centerOverlayMode === "match" && !enableFrame}
             <p class="sub-note">Turn on the outer overlay frame to mirror its look around the center photo.</p>
@@ -1729,12 +2096,14 @@
   .mt-10 { margin-top: 10px; }
   .mb-10 { margin-bottom: 10px; }
 
-  .color-row label { display: flex; flex-direction: column; font-size: 0.75rem; color: #bbb; gap: 4px; flex: 1; }
-  .color-row label input[type="color"] { width: 100%; height: 40px; padding: 0; border: none; border-radius: 8px; cursor: pointer; background: transparent; }
+  .color-row label { display: flex; flex-direction: column; font-size: 0.75rem; color: #bbb; gap: 6px; flex: 1; background: rgba(24, 24, 31, 0.88); border: 1px solid #2f3540; border-radius: 12px; padding: 10px; }
+  .color-row label input[type="color"] { width: 100%; height: 44px; padding: 0; border: none; border-radius: 10px; cursor: pointer; background: transparent; }
   .color-row label input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-  .color-row label input[type="color"]::-webkit-color-swatch { border: 1px solid #555; border-radius: 8px; }
+  .color-row label input[type="color"]::-webkit-color-swatch { border: 1px solid #555; border-radius: 10px; }
   
-  .hex-input { text-align: center; padding: 8px !important; font-size: 0.85rem !important; margin-bottom: 0 !important; }
+  .hex-input { text-align: center; padding: 9px !important; font-size: 0.85rem !important; margin-bottom: 0 !important; background: #171c24 !important; border-color: #394453 !important; font-weight: 700; letter-spacing: 0.03em; }
+  .range-value { display: inline-block; min-width: 52px; margin-left: 10px; color: #f7efe6; font-weight: 700; text-align: right; }
+  .native-color-proxy { position: fixed; inset: auto auto -100px -100px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
   .sub-panel { background-color: #111115; border-radius: 8px; padding: 12px; margin-top: 15px; }
   .sub-label { font-size: 0.8rem; color: #888; margin: 0 0 10px 0; }
@@ -1750,11 +2119,14 @@
   .wallet-card-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .wallet-meta { font-size: 0.8rem; color: #95a8bc; word-break: break-all; }
   .wallet-card-actions { display: flex; gap: 8px; }
+  .mini-color-btn { margin-top: 8px; border: 1px solid #42566e; background: #202c39; color: #eef6ff; border-radius: 10px; padding: 8px 11px; font-size: 0.75rem; font-weight: 800; cursor: pointer; }
+  .mini-color-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .studio-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .swatch-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-  .swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; cursor: pointer; }
+  .swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.08); cursor: pointer; }
   
-  .preset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .preset-btn { border: none; border-radius: 8px; padding: 12px 0; color: white; font-size: 0.85rem; font-weight: bold; cursor: pointer; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+  .preset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .preset-btn { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 13px 10px; color: white; font-size: 0.85rem; font-weight: 900; cursor: pointer; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
 
   .checkbox-label { display: flex; align-items: center; gap: 12px; font-size: 1rem; margin-bottom: 12px; color: #eee; }
   .checkbox-label input[type="checkbox"] { width: 20px; height: 20px; }

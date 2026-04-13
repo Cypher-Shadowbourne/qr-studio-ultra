@@ -1,4 +1,3 @@
-use fast_qr::convert::image::ImageBuilder;
 use fast_qr::qr::QRBuilder;
 use image::{Rgba, RgbaImage, ImageFormat};
 use std::io::Cursor;
@@ -65,6 +64,34 @@ fn blend_pixel(dst: &mut Rgba<u8>, src: Rgba<u8>) {
     dst[1] = (src[1] as f32 * alpha + dst[1] as f32 * inv_alpha).round() as u8;
     dst[2] = (src[2] as f32 * alpha + dst[2] as f32 * inv_alpha).round() as u8;
     dst[3] = ((src[3] as f32) + dst[3] as f32 * inv_alpha).round().clamp(0.0, 255.0) as u8;
+}
+
+fn gradient_color_at(
+    c1: Rgba<u8>,
+    c2: Rgba<u8>,
+    c3: Rgba<u8>,
+    c4: Option<Rgba<u8>>,
+    factor: f32,
+) -> Rgba<u8> {
+    let factor = factor.clamp(0.0, 1.0);
+    let (start, end, local_factor) = if let Some(c4) = c4 {
+        if factor <= 1.0 / 3.0 {
+            (c1, c2, factor * 3.0)
+        } else if factor <= 2.0 / 3.0 {
+            (c2, c3, (factor - 1.0 / 3.0) * 3.0)
+        } else {
+            (c3, c4, (factor - 2.0 / 3.0) * 3.0)
+        }
+    } else if factor <= 0.5 {
+        (c1, c2, factor * 2.0)
+    } else {
+        (c2, c3, (factor - 0.5) * 2.0)
+    };
+
+    let r = ((1.0 - local_factor) * start[0] as f32 + local_factor * end[0] as f32) as u8;
+    let g = ((1.0 - local_factor) * start[1] as f32 + local_factor * end[1] as f32) as u8;
+    let b = ((1.0 - local_factor) * start[2] as f32 + local_factor * end[2] as f32) as u8;
+    Rgba([r, g, b, 255])
 }
 
 #[tauri::command]
@@ -433,6 +460,8 @@ struct QrOptions {
     data: String,
     color1: String,
     color2: String,
+    color3: Option<String>,
+    color4: Option<String>,
     #[serde(rename = "bgColor")]
     bg_color: String,
     #[serde(rename = "eyeOut")]
@@ -448,7 +477,11 @@ struct QrOptions {
     #[serde(rename = "eyeShape")]
     eye_shape: String,
     #[serde(rename = "logoB64")]
-    logo_b64: Option<String>
+    logo_b64: Option<String>,
+    #[serde(rename = "logoSize")]
+    logo_size: Option<u32>,
+    #[serde(rename = "logoOpacity")]
+    logo_opacity: Option<u32>
 }
 
 #[tauri::command]
@@ -456,6 +489,8 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
     let data = options.data;
     let color1 = options.color1;
     let color2 = options.color2;
+    let color3 = options.color3.unwrap_or_else(|| color2.clone());
+    let color4 = options.color4;
     let bg_color = options.bg_color;
     let eye_out = options.eye_out;
     let eye_in = options.eye_in;
@@ -464,17 +499,19 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
     let bg_shape = options.bg_shape;
     let eye_shape = options.eye_shape;
     let logo_b64 = options.logo_b64;
+    let logo_size_percent = options.logo_size.unwrap_or(22).clamp(10, 36);
+    let logo_opacity_percent = options.logo_opacity.unwrap_or(100).clamp(15, 100);
 
     let qrcode = QRBuilder::new(data).ecl(fast_qr::ECL::H).build().map_err(|e| e.to_string())?;
-    
-    let pixmap = ImageBuilder::default().fit_width(600).to_pixmap(&qrcode);
 
-    let width = pixmap.width();
-    let height = pixmap.height();
+    let width = 600u32;
+    let height = 600u32;
     let mut img = RgbaImage::new(width, height);
 
     let c1 = hex_to_rgba(&color1);
     let c2 = hex_to_rgba(&color2);
+    let c3 = hex_to_rgba(&color3);
+    let c4 = color4.as_ref().map(|value| hex_to_rgba(value));
     let bg = hex_to_rgba(&bg_color);
     let e_out = hex_to_rgba(&eye_out);
     let e_in = hex_to_rgba(&eye_in);
@@ -482,122 +519,139 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
     let modules = qrcode.size; 
     let margin = 4.0;
     let total_modules = modules as f32 + (margin * 2.0);
+    let sample_offsets = [(0.25f32, 0.25f32), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)];
 
     for x in 0..width {
         for y in 0..height {
-            let mod_x_f32 = (x as f32 / width as f32) * total_modules;
-            let mod_y_f32 = (y as f32 / height as f32) * total_modules;
-            let mod_x = mod_x_f32 as u32;
-            let mod_y = mod_y_f32 as u32;
-            let m_size = total_modules as u32;
+            let mut sum_r = 0.0f32;
+            let mut sum_g = 0.0f32;
+            let mut sum_b = 0.0f32;
 
-            let in_tl = (4..11).contains(&mod_x) && (4..11).contains(&mod_y);
-            let in_tr = (m_size - 11..m_size - 4).contains(&mod_x) && (4..11).contains(&mod_y);
-            let in_bl = (4..11).contains(&mod_x) && (m_size - 11..m_size - 4).contains(&mod_y);
-            let is_eye = in_tl || in_tr || in_bl;
+            for (sample_dx, sample_dy) in sample_offsets {
+                let mod_x_f32 = ((x as f32 + sample_dx) / width as f32) * total_modules;
+                let mod_y_f32 = ((y as f32 + sample_dy) / height as f32) * total_modules;
+                let mod_x = mod_x_f32.floor() as i32;
+                let mod_y = mod_y_f32.floor() as i32;
+                let m_size = total_modules as i32;
 
-            let mut paint = false;
-            let mut color_to_use = bg;
+                let in_tl = (4..11).contains(&mod_x) && (4..11).contains(&mod_y);
+                let in_tr = ((m_size - 11)..(m_size - 4)).contains(&mod_x) && (4..11).contains(&mod_y);
+                let in_bl = (4..11).contains(&mod_x) && ((m_size - 11)..(m_size - 4)).contains(&mod_y);
+                let in_tl_reserved = (4..12).contains(&mod_x) && (4..12).contains(&mod_y);
+                let in_tr_reserved = ((m_size - 12)..(m_size - 4)).contains(&mod_x) && (4..12).contains(&mod_y);
+                let in_bl_reserved = (4..12).contains(&mod_x) && ((m_size - 12)..(m_size - 4)).contains(&mod_y);
+                let is_eye = in_tl || in_tr || in_bl;
+                let is_eye_reserved = in_tl_reserved || in_tr_reserved || in_bl_reserved;
 
-            if is_eye {
-                let exact_rel_x = if in_tl || in_bl { mod_x_f32 - 4.0 } else { mod_x_f32 - (m_size as f32 - 11.0) };
-                let exact_rel_y = if in_tl || in_tr { mod_y_f32 - 4.0 } else { mod_y_f32 - (m_size as f32 - 11.0) };
-                
-                let dx = exact_rel_x - 3.5;
-                let dy = exact_rel_y - 3.5;
+                let qr_x = (mod_x_f32 - margin).floor() as i32;
+                let qr_y = (mod_y_f32 - margin).floor() as i32;
+                let in_qr_bounds = qr_x >= 0 && qr_y >= 0 && qr_x < modules as i32 && qr_y < modules as i32;
+                let module_is_dark = in_qr_bounds && qrcode[qr_y as usize][qr_x as usize].value();
 
-                if eye_shape == "circle" {
-                    let dist = (dx*dx + dy*dy).sqrt();
-                    if dist <= 1.5 { paint = true; color_to_use = e_in; }
-                    else if (2.5..=3.5).contains(&dist) { paint = true; color_to_use = e_out; }
-                } 
-                else if eye_shape == "diamond" {
-                    let dist = dx.abs() + dy.abs();
-                    if dist <= 2.0 { paint = true; color_to_use = e_in; }
-                    else if (3.0..=5.0).contains(&dist) { paint = true; color_to_use = e_out; }
-                }
-                else if eye_shape == "rounded" {
-                    let adx = dx.abs();
-                    let ady = dy.abs();
-                    
-                    let mut in_inner = false;
-                    if adx <= 1.5 && ady <= 1.5 {
-                        if adx < 1.0 || ady < 1.0 { in_inner = true; }
-                        else {
-                            let cx = adx - 1.0; let cy = ady - 1.0;
-                            if cx*cx + cy*cy <= 0.25 { in_inner = true; }
+                let local_x = (mod_x_f32 - mod_x_f32.floor()).clamp(0.0, 0.9999);
+                let local_y = (mod_y_f32 - mod_y_f32.floor()).clamp(0.0, 0.9999);
+
+                let mut paint = false;
+                let mut sample_color = bg;
+
+                if is_eye {
+                    let exact_rel_x = if in_tl || in_bl { mod_x_f32 - 4.0 } else { mod_x_f32 - (m_size as f32 - 11.0) };
+                    let exact_rel_y = if in_tl || in_tr { mod_y_f32 - 4.0 } else { mod_y_f32 - (m_size as f32 - 11.0) };
+                    let dx = exact_rel_x - 3.5;
+                    let dy = exact_rel_y - 3.5;
+
+                    if eye_shape == "circle" {
+                        let dist = (dx * dx + dy * dy).sqrt();
+                        if dist <= 1.5 { paint = true; sample_color = e_in; }
+                        else if (2.5..=3.5).contains(&dist) { paint = true; sample_color = e_out; }
+                    } else if eye_shape == "diamond" {
+                        let dist = dx.abs() + dy.abs();
+                        if dist <= 2.0 { paint = true; sample_color = e_in; }
+                        else if (3.0..=5.0).contains(&dist) { paint = true; sample_color = e_out; }
+                    } else if eye_shape == "rounded" {
+                        let adx = dx.abs();
+                        let ady = dy.abs();
+                        let mut in_inner = false;
+                        if adx <= 1.5 && ady <= 1.5 {
+                            if adx < 1.0 || ady < 1.0 { in_inner = true; }
+                            else {
+                                let cx = adx - 1.0;
+                                let cy = ady - 1.0;
+                                if cx * cx + cy * cy <= 0.25 { in_inner = true; }
+                            }
                         }
-                    }
 
-                    let mut in_outer = false;
-                    if adx <= 3.5 && ady <= 3.5 {
-                        if adx < 2.5 || ady < 2.5 { in_outer = true; }
-                        else {
-                            let cx = adx - 2.5; let cy = ady - 2.5;
-                            if cx*cx + cy*cy <= 1.0 { in_outer = true; }
+                        let mut in_outer = false;
+                        if adx <= 3.5 && ady <= 3.5 {
+                            if adx < 2.5 || ady < 2.5 { in_outer = true; }
+                            else {
+                                let cx = adx - 2.5;
+                                let cy = ady - 2.5;
+                                if cx * cx + cy * cy <= 1.0 { in_outer = true; }
+                            }
                         }
-                    }
 
-                    if in_inner { paint = true; color_to_use = e_in; }
-                    else if in_outer && (adx >= 2.5 || ady >= 2.5) {
-                        paint = true; color_to_use = e_out;
-                    }
-                }
-                else {
-                    let pixel = pixmap.pixel(x, y).unwrap();
-                    if pixel.red() < 128 {
+                        if in_inner { paint = true; sample_color = e_in; }
+                        else if in_outer && (adx >= 2.5 || ady >= 2.5) { paint = true; sample_color = e_out; }
+                    } else if module_is_dark {
                         paint = true;
-                        if dx.abs() <= 1.5 && dy.abs() <= 1.5 { color_to_use = e_in; }
-                        else { color_to_use = e_out; }
+                        if dx.abs() <= 1.5 && dy.abs() <= 1.5 { sample_color = e_in; }
+                        else { sample_color = e_out; }
                     }
-                }
-            } else {
-                let pixel = pixmap.pixel(x, y).unwrap();
-                if pixel.red() < 128 {
+                } else if !is_eye_reserved && module_is_dark {
                     if main_shape == "circle" {
-                        let local_x = mod_x_f32 % 1.0;
-                        let local_y = mod_y_f32 % 1.0;
                         let dx = local_x - 0.5;
                         let dy = local_y - 0.5;
-                        if dx*dx + dy*dy <= 0.20 { paint = true; }
+                        if dx * dx + dy * dy <= 0.21 { paint = true; }
                     } else if main_shape == "rounded" {
-                        let local_x = mod_x_f32 % 1.0;
-                        let local_y = mod_y_f32 % 1.0;
                         let dx = (local_x - 0.5).abs();
                         let dy = (local_y - 0.5).abs();
-                        if dx < 0.3 || dy < 0.3 {
+                        if dx < 0.34 || dy < 0.34 {
                             paint = true;
                         } else {
-                            let cx = dx - 0.3;
-                            let cy = dy - 0.3;
-                            if cx*cx + cy*cy <= 0.04 { paint = true; }
+                            let cx = dx - 0.34;
+                            let cy = dy - 0.34;
+                            if cx * cx + cy * cy <= 0.028 { paint = true; }
                         }
                     } else if main_shape == "diamond" {
-                        let local_x = mod_x_f32 % 1.0;
-                        let local_y = mod_y_f32 % 1.0;
                         let dx = (local_x - 0.5).abs();
                         let dy = (local_y - 0.5).abs();
-                        if dx + dy <= 0.5 { paint = true; }
+                        if dx + dy <= 0.52 { paint = true; }
                     } else {
                         paint = true;
                     }
 
                     if paint {
-                        if fill_type == "Linear" {
-                            let factor = y as f32 / height as f32;
-                            let r = ((1.0 - factor) * c1[0] as f32 + factor * c2[0] as f32) as u8;
-                            let g = ((1.0 - factor) * c1[1] as f32 + factor * c2[1] as f32) as u8;
-                            let b = ((1.0 - factor) * c1[2] as f32 + factor * c2[2] as f32) as u8;
-                            color_to_use = Rgba([r, g, b, 255]);
+                        sample_color = if fill_type == "Linear" {
+                            gradient_color_at(c1, c2, c3, c4, (y as f32 + sample_dy) / height as f32)
                         } else {
-                            color_to_use = c1;
-                        }
+                            c1
+                        };
                     }
+                }
+
+                if paint {
+                    sum_r += sample_color[0] as f32;
+                    sum_g += sample_color[1] as f32;
+                    sum_b += sample_color[2] as f32;
+                } else {
+                    sum_r += bg[0] as f32;
+                    sum_g += bg[1] as f32;
+                    sum_b += bg[2] as f32;
                 }
             }
 
-            if paint { img.put_pixel(x, y, color_to_use); } 
-            else { img.put_pixel(x, y, bg); }
+            let samples = sample_offsets.len() as f32;
+            img.put_pixel(
+                x,
+                y,
+                Rgba([
+                    (sum_r / samples).round() as u8,
+                    (sum_g / samples).round() as u8,
+                    (sum_b / samples).round() as u8,
+                    255,
+                ]),
+            );
         }
     }
 
@@ -606,7 +660,7 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
         
         if let Ok(decoded) = general_purpose::STANDARD.decode(clean_b64) {
             if let Ok(logo_img) = image::load_from_memory(&decoded) {
-                let logo_size = (width as f32 * 0.22) as u32; 
+                let logo_size = ((width as f32) * (logo_size_percent as f32 / 100.0)).round() as u32;
                 let resized_logo = logo_img
                     .resize(logo_size, logo_size, image::imageops::FilterType::Lanczos3)
                     .to_rgba8();
@@ -650,8 +704,16 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
                             continue;
                         }
 
+                        let mut adjusted_src = src;
+                        adjusted_src[3] = ((adjusted_src[3] as f32) * (logo_opacity_percent as f32 / 100.0))
+                            .round()
+                            .clamp(0.0, 255.0) as u8;
+                        if adjusted_src[3] == 0 {
+                            continue;
+                        }
+
                         let dst = img.get_pixel_mut(target_x, target_y);
-                        blend_pixel(dst, src);
+                        blend_pixel(dst, adjusted_src);
                     }
                 }
             }
