@@ -21,6 +21,8 @@ It is designed for people who want more than a basic black-and-white QR utility.
 | ![QR Studio Ultra screenshot 5](docs/screenshots/gallery-05.png) | ![QR Studio Ultra screenshot 6](docs/screenshots/gallery-06.png) |
 | ![QR Studio Ultra screenshot 7](docs/screenshots/gallery-07.png) | ![QR Studio Ultra screenshot 8](docs/screenshots/gallery-08.png) |
 | ![QR Studio Ultra screenshot 9](docs/screenshots/gallery-09.png) | ![QR Studio Ultra screenshot 10](docs/screenshots/gallery-10.png) |
+| ![QR Studio Ultra screenshot 11](docs/screenshots/gallery-11.png) | ![QR Studio Ultra screenshot 12](docs/screenshots/gallery-12.png) |
+| ![QR Studio Ultra screenshot 13](docs/screenshots/gallery-13.png) | ![QR Studio Ultra screenshot 14](docs/screenshots/gallery-14.png) |
 
 ## Quick Start
 
