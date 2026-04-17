@@ -10,6 +10,7 @@
   "permissions": [
     "barcode-scanner:default",
     "dialog:default",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "dialog:allow-open"
   ]
 }

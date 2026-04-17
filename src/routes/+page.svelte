@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { Format, scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
-  import { save } from "@tauri-apps/plugin-dialog";
+  import { open, save } from "@tauri-apps/plugin-dialog";
 
   type SavedWallet = {
     id: string;
@@ -747,10 +747,28 @@
       const isMobile = isNativeMobileDevice();
 
       if (isMobile) {
-        const result = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: saveFormat });
-        showSaveToastMessage(result.message, "success");
-        showMobileSaveActions = true;
-        rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to Gallery`);
+        // Use folder picker on Android if requested, or default to gallery
+        const selectedPath = await open({
+          directory: true,
+          multiple: false,
+          title: "Select folder to save QR code"
+        });
+
+        if (selectedPath) {
+          const timestamp = Date.now();
+          const ext = saveFormat;
+          const filename = `QR_Studio_${timestamp}.${ext}`;
+          const fullPath = `${selectedPath}/${filename}`;
+          const msg = await invoke("save_to_path", { b64: b64Data, path: fullPath });
+          showSaveToastMessage(String(msg), "success");
+          rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to folder`);
+        } else {
+          // Fallback to default gallery save if they cancel folder picker
+          const result = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: saveFormat });
+          showSaveToastMessage(result.message, "success");
+          showMobileSaveActions = true;
+          rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to Gallery`);
+        }
       } else {
         // Prompt user to choose where to save on desktop
         const filePath = await save({
