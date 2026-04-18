@@ -1,0 +1,51 @@
+     Running BeforeDevCommand (`npm run dev`)
+
+> qr-studio-ultra@1.0.0 dev
+> vite dev
+
+
+  [32m[1mVITE[22m v6.4.2[39m  [2mready in [0m[1m2086[22m[2m[0m ms[22m
+
+  [32mÔ×£[39m  [1mLocal[22m:   [36mhttp://localhost:[1m1420[22m/[39m
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching E:\qr-studio-ultra-development\src-tauri for changes...
+   Compiling qr-studio-ultra v0.1.0 (E:\qr-studio-ultra-development\src-tauri)
+    Building [=======================> ] 518/520: qr-studÔÇª
+                                                            
+warning: unused variable: `mime_type`
+   --> src\lib.rs:358:9
+    |
+358 |     let mime_type = if ext == "jpg" { "image/jpeg" } else { "image/png" };
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_mime_type`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+    Building [=======================> ] 518/520: qr-studÔÇª
+                                                            
+warning: unused variable: `decoded`
+   --> src\lib.rs:396:9
+    |
+396 |     let decoded = general_purpose::STANDARD.decode(clean_b64).map_err(|e| e.to_string())?;
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_decoded`
+
+warning: unused variable: `app`
+   --> src\lib.rs:416:32
+    |
+416 | async fn open_last_saved_image(app: tauri::AppHandle) -> Result<String, String> {
+    |                                ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+    Building [=======================> ] 518/520: qr-studÔÇª
+                                                            
+warning: unused variable: `app`
+   --> src\lib.rs:433:33
+    |
+433 | async fn share_last_saved_image(app: tauri::AppHandle) -> Result<String, String> {
+    |                                 ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+    Building [=======================> ] 518/520: qr-studÔÇª
+                                                            
+warning: `qr-studio-ultra` (lib) generated 4 warnings (run `cargo fix --lib -p qr-studio-ultra` to apply 4 suggestions)
+    Building [=======================> ] 519/520: qr-studÔÇª
+                                                            
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.82s
+     Running `target\debug\qr-studio-ultra.exe`

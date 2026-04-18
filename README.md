@@ -14,13 +14,13 @@ It is designed for people who want more than a basic black-and-white QR utility.
 
 ## Screenshots
 
-| | |
-| --- | --- |
-| ![QR Studio Ultra screenshot 1](docs/screenshots/gallery-01.png) | ![QR Studio Ultra screenshot 2](docs/screenshots/gallery-02.png) |
-| ![QR Studio Ultra screenshot 3](docs/screenshots/gallery-03.png) | ![QR Studio Ultra screenshot 4](docs/screenshots/gallery-04.png) |
-| ![QR Studio Ultra screenshot 5](docs/screenshots/gallery-05.png) | ![QR Studio Ultra screenshot 6](docs/screenshots/gallery-06.png) |
-| ![QR Studio Ultra screenshot 7](docs/screenshots/gallery-07.png) | ![QR Studio Ultra screenshot 8](docs/screenshots/gallery-08.png) |
-| ![QR Studio Ultra screenshot 9](docs/screenshots/gallery-09.png) | ![QR Studio Ultra screenshot 10](docs/screenshots/gallery-10.png) |
+|                                                                   |                                                                   |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| ![QR Studio Ultra screenshot 1](docs/screenshots/gallery-01.png)  | ![QR Studio Ultra screenshot 2](docs/screenshots/gallery-02.png)  |
+| ![QR Studio Ultra screenshot 3](docs/screenshots/gallery-03.png)  | ![QR Studio Ultra screenshot 4](docs/screenshots/gallery-04.png)  |
+| ![QR Studio Ultra screenshot 5](docs/screenshots/gallery-05.png)  | ![QR Studio Ultra screenshot 6](docs/screenshots/gallery-06.png)  |
+| ![QR Studio Ultra screenshot 7](docs/screenshots/gallery-07.png)  | ![QR Studio Ultra screenshot 8](docs/screenshots/gallery-08.png)  |
+| ![QR Studio Ultra screenshot 9](docs/screenshots/gallery-09.png)  | ![QR Studio Ultra screenshot 10](docs/screenshots/gallery-10.png) |
 | ![QR Studio Ultra screenshot 11](docs/screenshots/gallery-11.png) | ![QR Studio Ultra screenshot 12](docs/screenshots/gallery-12.png) |
 | ![QR Studio Ultra screenshot 13](docs/screenshots/gallery-13.png) | ![QR Studio Ultra screenshot 14](docs/screenshots/gallery-14.png) |
 
@@ -43,8 +43,8 @@ npm run dev
 
 Current packaged Android builds in this workspace:
 
-| Build | Best for |
-| --- | --- |
+| Build                           | Best for                           |
+| ------------------------------- | ---------------------------------- |
 | external Android package export | device testing and release sharing |
 
 Desktop development runs through Tauri with:
@@ -68,15 +68,15 @@ QR Studio Ultra currently supports:
 
 ## Feature Matrix
 
-| Area | Included |
-| --- | --- |
-| QR styling | solid fills, multi-stop gradients, custom module shapes, styled eyes |
-| Logos | upload, crop, center placement, size control, opacity control |
-| Scanner | QR plus broader barcode format support, square targeting UI, animated scan line |
-| Payloads | URL, Wi-Fi, vCard, email, SMS, phone, geo, event, social, crypto and more |
-| Crypto | wallet profiles, richer payment URI generation, optional amount/label/message |
-| Platforms | Tauri desktop workflow, Android builds, native save/share integration |
-| Rendering | Rust-backed QR generation and logo compositing |
+| Area       | Included                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| QR styling | solid fills, multi-stop gradients, custom module shapes, styled eyes                            |
+| Logos      | upload, crop, center placement, size control, opacity control                                   |
+| Scanner    | QR, Code 128, EAN, UPC, ISBN, Code 39, PDF417 and more; square targeting UI, animated scan line |
+| Payloads   | URL, Wi-Fi, vCard, email, SMS, phone, geo, event, social, crypto and more                       |
+| Crypto     | wallet profiles, richer payment URI generation, optional amount/label/message                   |
+| Platforms  | Tauri desktop workflow, Android builds, native save/share integration                           |
+| Rendering  | Rust-backed QR generation and logo compositing                                                  |
 
 ## Why This Project Exists
 
@@ -127,6 +127,16 @@ The app can request a wider set of barcode formats through the Tauri barcode sca
 - square target aperture
 - animated scan line
 - result type/format display
+
+**Supported Barcode Formats:**
+
+- **Code 128** — Alphanumeric barcodes commonly used for shipping labels and inventory
+- **EAN** (European Article Number) — Standard retail barcodes for products
+- **UPC** (Universal Product Code) — North American product identification codes
+- **ISBN** (International Standard Book Number) — Book identification codes
+- **Code 39** — Alphanumeric codes used in various industries
+- **PDF417** — 2D barcodes for documents and identity verification
+- And additional formats through the Tauri barcode scanner plugin
 
 ### Wallet and Payment Support
 

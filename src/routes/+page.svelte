@@ -1416,7 +1416,7 @@
           <div class="scanner-corner bottom-right"></div>
           <div class="scanner-line"></div>
         </div>
-        <p class="scanner-caption">Reads QR, EAN, UPC, Code 39, Code 128, PDF417 and more</p>
+        <p class="scanner-caption">Reads QR, Code 128, EAN, UPC, ISBN, Code 39, PDF417 and more</p>
       </div>
       <button class="cancel-scan-btn" on:click={cancelScanner}>CANCEL SCAN</button>
     </div>
