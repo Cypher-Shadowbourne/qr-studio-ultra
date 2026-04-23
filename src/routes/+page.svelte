@@ -1770,11 +1770,11 @@
                 
                 const textWidth = ctx.measureText(text.toUpperCase()).width;
 
-                let badgeY = isTop ? 100 : 700;
-                if (bgShape === "diamond") badgeY = isTop ? 160 : 640;
-                else if (bgShape === "octagon") badgeY = isTop ? 130 : 670;
-                else if (bgShape === "rounded") badgeY = isTop ? 110 : 690;
-                else if (bgShape === "circle") badgeY = isTop ? 100 : 700;
+                let badgeY = isTop ? 88 : 700;
+                if (bgShape === "diamond") badgeY = isTop ? 148 : 640;
+                else if (bgShape === "octagon") badgeY = isTop ? 118 : 670;
+                else if (bgShape === "rounded") badgeY = isTop ? 98 : 690;
+                else if (bgShape === "circle") badgeY = isTop ? 88 : 700;
 
                 const badgeWidth = textWidth + 80;
                 const badgeHeight = 70;

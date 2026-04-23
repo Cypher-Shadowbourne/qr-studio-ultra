@@ -810,11 +810,11 @@ fn get_qr_svg_size(shape: &str) -> f32 {
 
 fn get_flat_badge_y(shape: &str, is_top: bool) -> f32 {
     match shape {
-        "diamond" => if is_top { 160.0 } else { 640.0 },
-        "octagon" => if is_top { 130.0 } else { 670.0 },
-        "rounded" => if is_top { 110.0 } else { 690.0 },
-        "circle" => if is_top { 100.0 } else { 700.0 },
-        _ => if is_top { 100.0 } else { 700.0 },
+        "diamond" => if is_top { 148.0 } else { 640.0 },
+        "octagon" => if is_top { 118.0 } else { 670.0 },
+        "rounded" => if is_top { 98.0 } else { 690.0 },
+        "circle" => if is_top { 88.0 } else { 700.0 },
+        _ => if is_top { 88.0 } else { 700.0 },
     }
 }
 
