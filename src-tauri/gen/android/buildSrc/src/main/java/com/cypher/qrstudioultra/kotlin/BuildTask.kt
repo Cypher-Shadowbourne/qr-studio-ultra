@@ -48,12 +48,22 @@ open class BuildTask : DefaultTask() {
         val rootDirRel = rootDirRel ?: throw GradleException("rootDirRel cannot be null")
         val target = target ?: throw GradleException("target cannot be null")
         val release = release ?: throw GradleException("release cannot be null")
-        val args = listOf("run", "--", "tauri", "android", "android-studio-script");
+        val args = listOf("tauri", "android", "android-studio-script");
+        val npxExecutable = if (Os.isFamily(Os.FAMILY_WINDOWS)) "npx.cmd" else "npx"
 
         project.exec {
             workingDir(File(project.projectDir, rootDirRel))
-            executable(executable)
+            executable(npxExecutable)
             args(args)
+            // Skip unnecessary checks that might fail in restricted environments
+            environment("TAURI_SKIP_UPDATE_CHECK", "true")
+            environment("TAURI_OFFLINE", "true")
+            // Avoid WebSocket initialization which seems to be failing
+            environment("TAURI_WEBVIEW_DEBUG_PORT", "")
+            // Ensure no dev server is expected
+            environment("TAURI_DEV_HOST", "")
+            // Use local IP for WebSocket just in case it still tries to connect
+            environment("TAURI_DEV_URL", "http://127.0.0.1:0")
             if (project.logger.isEnabled(LogLevel.DEBUG)) {
                 args("-vv")
             } else if (project.logger.isEnabled(LogLevel.INFO)) {

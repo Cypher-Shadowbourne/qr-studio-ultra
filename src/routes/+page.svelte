@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { Format, scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
-  import { open, save } from "@tauri-apps/plugin-dialog";
+  import { save } from "@tauri-apps/plugin-dialog";
 
   type SavedWallet = {
     id: string;
@@ -83,27 +83,41 @@
 
   // Eyes
   let eyeShape = "square";
-  let eyeOut = "#000000";
-  let eyeIn = "#000000";
+  let eyeOut = "#7646E0";
+  let eyeIn =  "#A946E0";
 
   // PRO Settings & Logo
   let enableFrame = false;
   let frameText = "Scan Me";
+  let frameTextTop = "";
+  let frameTextMode = "flat";
+  let frameTextRadius = 350;
+  let frameTextSpacing = 1;
+  let frameTextSize = 44;
+  let frameTextColor = "#A946E0";
+  let matchTextStyle = false;
+  let transparentTextBg = false;
+
+  let frameTextTopMode = "flat";
+  let frameTextTopRadius = 350;
+  let frameTextTopSpacing = 1;
+  let frameTextTopSize = 44;
+  let frameTextTopColor = "#A946E0";
+  let matchTextTopStyle = false;
+  let transparentTextTopBg = false;
+
   let ringStyle = "solid";
-  let ringColor = "#4A2B15";
+  let ringColor = "#A946E0";
   let ringColor2 = "#8b5e3c";
   let ringColor3 = "#e6a756";
   let ringColor4 = "#ffd166";
   let ringUseFourthStop = true;
   let ringGradientMode = "match-main";
   let ringColorMode = "solid";
-  let frameTextColor = "#4A2B15";
-  let transparentTextBg = false;
   let transparentFrameBg = false;
-  let matchTextStyle = false;
   let centerOverlayMode = "none";
   let centerOverlayStyle = "solid";
-  let centerOverlayColor = "#4A2B15";
+  let centerOverlayColor = "#A946E0";
   let centerOverlayColor2 = "#8b5e3c";
   let centerOverlayColor3 = "#e6a756";
   let centerOverlayColor4 = "#ffd166";
@@ -114,8 +128,46 @@
   let logoSizePercent = 22;
   let logoOpacityPercent = 100;
 
-  let logoBase64: string | null = null;
+  let generationTimer: ReturnType<typeof setTimeout> | null = null;
+  const sanitizeShape = (shape: string, fallback = "square") =>
+    shape === "diamond" || shape === "octagon" ? fallback : shape;
+  function debouncedRunGeneration() {
+    if (generationTimer) clearTimeout(generationTimer);
+    generationTimer = setTimeout(() => {
+      runGeneration();
+    }, 100);
+  }
+
+  let initialLoadDone = false;
+  onMount(() => {
+    initialLoadDone = true;
+  });
+
+  $: if (initialLoadDone && typeof runGeneration === 'function') {
+      // Trigger update on any of these variables
+      const _trigger = [
+        enableFrame, 
+        frameText, frameTextMode, frameTextSize, frameTextColor, matchTextStyle, transparentTextBg,
+        frameTextRadius, frameTextSpacing,
+        frameTextTop, frameTextTopMode, frameTextTopSize, frameTextTopColor, matchTextTopStyle, transparentTextTopBg,
+        frameTextTopRadius, frameTextTopSpacing,
+        bgShape, mainShape, fillType, color1, color2, color3, color4, useFourthStop, bgColor,
+        eyeShape, eyeOut, eyeIn, logoBase64, logoSizePercent, logoOpacityPercent,
+        ringStyle, ringColor, ringColor2, ringColor3, ringColor4, ringUseFourthStop,
+        ringColorMode, ringGradientMode, centerOverlayMode, centerOverlayStyle,
+        centerOverlayColor, centerOverlayColor2, centerOverlayColor3, centerOverlayColor4,
+        centerOverlayUseFourthStop, centerOverlayGradientMode, centerOverlayColorMode,
+        transparentFrameBg
+      ];
+      debouncedRunGeneration();
+  }
+  $: bgShape = sanitizeShape(bgShape, "square");
+  $: mainShape = sanitizeShape(mainShape, "square");
+  $: eyeShape = sanitizeShape(eyeShape, "square");
   let logoName = "";
+  let logoBase64 = "";
+  let logoTrimmedWidth = 200;
+  let logoTrimmedHeight = 200;
   let fileInput: HTMLInputElement;
   let fallbackColorInput: HTMLInputElement;
 
@@ -191,13 +243,31 @@
     { name: "Steel Fade", c1: "#1f2731", c2: "#485563", c3: "#7d8fa1" }
   ];
   const walletStorageKey = "qr-studio-ultra.wallets";
-  const scannerFormats = Object.values(Format);
+
+  // Explicitly include Code 128, EAN, UPC, and ISBN formats for barcode scanning
+  const scannerFormats = [
+    Format.QRCode,      // QR codes (main functionality)
+    Format.Code128,     // Code 128 barcodes
+    Format.EAN13,       // EAN-13 (includes ISBN)
+    Format.EAN8,        // EAN-8
+    Format.UPC_A,       // UPC-A
+    Format.UPC_E        // UPC-E
+  ];
 
   onMount(() => {
     loadSavedWallets();
   });
 
-  function applySolid(c: string) { color1 = c; fillType = "Solid"; }
+  function applySolid(c: string) {
+    color1 = c;
+    fillType = "Solid";
+    eyeOut = c;
+    eyeIn = c;
+    ringColor = c;
+    frameTextColor = c;
+    frameTextTopColor = c;
+    centerOverlayColor = c;
+  }
   function applyGradient(c1: string, c2: string, c3?: string) {
     color1 = c1;
     color2 = c2;
@@ -205,6 +275,22 @@
     color4 = c3 ?? c2;
     useFourthStop = true;
     fillType = "Linear";
+    eyeOut = c1;
+    eyeIn = c2;
+    ringColor = c1;
+    ringColor2 = c2;
+    ringColor3 = c3 ?? c2;
+    ringColor4 = c3 ?? c2;
+    ringUseFourthStop = true;
+    ringColorMode = "gradient";
+    frameTextColor = c1;
+    frameTextTopColor = c1;
+    centerOverlayColor = c1;
+    centerOverlayColor2 = c2;
+    centerOverlayColor3 = c3 ?? c2;
+    centerOverlayColor4 = c3 ?? c2;
+    centerOverlayUseFourthStop = true;
+    centerOverlayColorMode = "gradient";
   }
 
   function getGradientPalette(
@@ -479,6 +565,78 @@
 
   function stopDrag() { isDragging = false; }
 
+  function trimTransparentCanvas(sourceCanvas: HTMLCanvasElement) {
+    const ctx = sourceCanvas.getContext("2d");
+    if (!ctx) return sourceCanvas;
+
+    const { width, height } = sourceCanvas;
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const alpha = imageData[(y * width + x) * 4 + 3];
+        if (alpha > 8) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      logoTrimmedWidth = width;
+      logoTrimmedHeight = height;
+      return sourceCanvas;
+    }
+
+    const trimmedWidth = maxX - minX + 1;
+    const trimmedHeight = maxY - minY + 1;
+    const trimmedCanvas = document.createElement("canvas");
+    trimmedCanvas.width = trimmedWidth;
+    trimmedCanvas.height = trimmedHeight;
+    const trimmedCtx = trimmedCanvas.getContext("2d");
+    if (!trimmedCtx) return sourceCanvas;
+
+    trimmedCtx.drawImage(sourceCanvas, minX, minY, trimmedWidth, trimmedHeight, 0, 0, trimmedWidth, trimmedHeight);
+    logoTrimmedWidth = trimmedWidth;
+    logoTrimmedHeight = trimmedHeight;
+    return trimmedCanvas;
+  }
+
+  function getRenderedLogoDimensions(renderedQrSize: number) {
+    const maxSize = renderedQrSize * (logoSizePercent / 100);
+    const aspect = Math.max(logoTrimmedWidth, 1) / Math.max(logoTrimmedHeight, 1);
+
+    if (aspect >= 1) {
+      return {
+        width: maxSize,
+        height: maxSize / aspect
+      };
+    }
+
+    return {
+      width: maxSize * aspect,
+      height: maxSize
+    };
+  }
+
+  function getCenterOverlayDimensions(renderedQrSize: number) {
+    const logoDimensions = getRenderedLogoDimensions(renderedQrSize);
+    const minSide = Math.min(logoDimensions.width, logoDimensions.height);
+    const lineWidth = Math.max(4, minSide * 0.04);
+    const gap = Math.max(2, minSide * 0.03);
+
+    return {
+      width: logoDimensions.width + lineWidth + gap * 2,
+      height: logoDimensions.height + lineWidth + gap * 2
+    };
+  }
+
   // CRITICAL FIX: Synchronous, double-decode prevention
   function commitCrop() {
     const canvas = document.createElement("canvas");
@@ -489,8 +647,9 @@
     
     // Reuse the already-decoded cropImgEl element directly!
     ctx.drawImage(cropImgEl, cropX, cropY, cropSize, cropSize, 0, 0, 200, 200);
-    
-    logoBase64 = canvas.toDataURL("image/png");
+
+    const trimmedCanvas = trimTransparentCanvas(canvas);
+    logoBase64 = trimmedCanvas.toDataURL("image/png");
     showCropModal = false;
   }
 
@@ -498,6 +657,8 @@
     showCropModal = false;
     logoName = "";
     cropRawSrc = "";
+    logoTrimmedWidth = 200;
+    logoTrimmedHeight = 200;
   }
 
   function isNativeMobileDevice() {
@@ -739,7 +900,9 @@
   // --- SAVE TO NATIVE GALLERY ---
   async function saveImage() {
     if (!qrImagePng) return;
-    const b64Data = saveFormat === "jpg" ? qrImageJpg : qrImagePng;
+    const finalData = buildFinalQrData();
+    const isSvg = saveFormat === "svg";
+    const b64Data = isSvg ? "" : (saveFormat === "jpg" ? qrImageJpg : qrImagePng);
     mobileSaveMessage = "";
     showMobileSaveActions = false;
     
@@ -747,28 +910,17 @@
       const isMobile = isNativeMobileDevice();
 
       if (isMobile) {
-        // Use folder picker on Android if requested, or default to gallery
-        const selectedPath = await open({
-          directory: true,
-          multiple: false,
-          title: "Select folder to save QR code"
-        });
-
-        if (selectedPath) {
-          const timestamp = Date.now();
-          const ext = saveFormat;
-          const filename = `QR_Studio_${timestamp}.${ext}`;
-          const fullPath = `${selectedPath}/${filename}`;
-          const msg = await invoke("save_to_path", { b64: b64Data, path: fullPath });
-          showSaveToastMessage(String(msg), "success");
-          rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to folder`);
-        } else {
-          // Fallback to default gallery save if they cancel folder picker
-          const result = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: saveFormat });
-          showSaveToastMessage(result.message, "success");
-          showMobileSaveActions = true;
-          rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to Gallery`);
+        // Android builds save raster images straight to gallery/photos.
+        // Folder picker support is not consistently available on mobile.
+        if (isSvg) {
+          showSaveToastMessage("SVG export on mobile is not available yet. Use PNG or JPG, or export SVG on desktop.", "info");
+          return;
         }
+
+        const result = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: saveFormat });
+        showSaveToastMessage(result.message, "success");
+        showMobileSaveActions = true;
+        rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to Gallery`);
       } else {
         // Prompt user to choose where to save on desktop
         const filePath = await save({
@@ -780,7 +932,9 @@
         });
 
         if (filePath) {
-          const msg = await invoke("save_to_path", { b64: b64Data, path: filePath });
+          const msg = isSvg
+            ? await invoke("save_svg_to_path", { options: buildQrRenderOptions(finalData), path: filePath })
+            : await invoke("save_to_path", { b64: b64Data, path: filePath });
           showSaveToastMessage(String(msg), "success");
           rememberRecentSave(`Saved ${saveFormat.toUpperCase()} locally`);
         }
@@ -910,113 +1064,340 @@
     runGeneration();
   }
 
+  // --- CANVAS HELPERS ---
+  const drawShapePath = (c: CanvasRenderingContext2D, s: string, cx: number, cy: number, sz: number) => {
+    c.beginPath();
+    if (s === "circle") {
+      c.arc(cx, cy, sz / 2, 0, Math.PI * 2);
+    } else if (s === "rounded") {
+      const r = sz * 0.2;
+      const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
+      c.moveTo(cx, top);
+      c.arcTo(right, top, right, bottom, r);
+      c.arcTo(right, bottom, left, bottom, r);
+      c.arcTo(left, bottom, left, top, r);
+      c.arcTo(left, top, right, top, r);
+      c.closePath();
+    } else if (s === "diamond") {
+      c.moveTo(cx, cy - sz / 2);
+      c.lineTo(cx + sz / 2, cy);
+      c.lineTo(cx, cy + sz / 2);
+      c.lineTo(cx - sz / 2, cy);
+      c.closePath();
+    } else if (s === "octagon") {
+      const side = sz * 0.28;
+      const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
+      c.moveTo(cx - side, top);
+      c.lineTo(cx + side, top);
+      c.lineTo(right, top + side);
+      c.lineTo(right, bottom - side);
+      c.lineTo(cx + side, bottom);
+      c.lineTo(cx - side, bottom);
+      c.lineTo(left, bottom - side);
+      c.lineTo(left, top + side);
+      c.closePath();
+    } else {
+      c.rect(cx - sz / 2, cy - sz / 2, sz, sz);
+    }
+  };
+
+  const drawShapePathRect = (
+    c: CanvasRenderingContext2D,
+    s: string,
+    cx: number,
+    cy: number,
+    width: number,
+    height: number
+  ) => {
+    c.beginPath();
+    const halfW = width / 2;
+    const halfH = height / 2;
+    if (s === "circle") {
+      c.ellipse(cx, cy, halfW, halfH, 0, 0, Math.PI * 2);
+    } else if (s === "rounded") {
+      const r = Math.min(width, height) * 0.2;
+      const left = cx - halfW, top = cy - halfH, right = cx + halfW, bottom = cy + halfH;
+      c.moveTo(cx, top);
+      c.arcTo(right, top, right, bottom, r);
+      c.arcTo(right, bottom, left, bottom, r);
+      c.arcTo(left, bottom, left, top, r);
+      c.arcTo(left, top, right, top, r);
+      c.closePath();
+    } else if (s === "diamond") {
+      c.moveTo(cx, cy - halfH);
+      c.lineTo(cx + halfW, cy);
+      c.lineTo(cx, cy + halfH);
+      c.lineTo(cx - halfW, cy);
+      c.closePath();
+    } else if (s === "octagon") {
+      const sideX = width * 0.28;
+      const sideY = height * 0.28;
+      const left = cx - halfW, top = cy - halfH, right = cx + halfW, bottom = cy + halfH;
+      c.moveTo(cx - sideX, top);
+      c.lineTo(cx + sideX, top);
+      c.lineTo(right, cy - sideY);
+      c.lineTo(right, cy + sideY);
+      c.lineTo(cx + sideX, bottom);
+      c.lineTo(cx - sideX, bottom);
+      c.lineTo(left, cy + sideY);
+      c.lineTo(left, cy - sideY);
+      c.closePath();
+    } else {
+      c.rect(cx - halfW, cy - halfH, width, height);
+    }
+  };
+
+  const drawRingDecoration = (
+    c: CanvasRenderingContext2D,
+    style: string,
+    shape: string,
+    cx: number,
+    cy: number,
+    size: number,
+    color: string,
+    palette: { c1: string; c2: string; c3?: string; c4?: string },
+    useGradient: boolean
+  ) => {
+    if (style === "none") return;
+    c.save();
+    c.lineJoin = "round";
+    c.lineCap = "round";
+
+    let gradient: CanvasGradient | null = null;
+    if (useGradient) {
+      gradient = c.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
+      applyGradientStops(gradient, palette.c1, palette.c2, palette.c3, palette.c4, Boolean(palette.c4));
+    }
+
+    c.strokeStyle = useGradient && gradient ? gradient : color;
+    const baseLine = Math.max(4, size * 0.04);
+
+    if (style === "dashed") {
+      c.setLineDash([baseLine * 2, baseLine * 2]);
+      c.lineWidth = baseLine;
+      drawShapePath(c, shape, cx, cy, size); c.stroke();
+    } else if (style === "double") {
+      c.lineWidth = baseLine * 0.4;
+      drawShapePath(c, shape, cx, cy, size); c.stroke();
+      drawShapePath(c, shape, cx, cy, size - baseLine * 1.5); c.stroke();
+    } else if (style === "glow") {
+      c.shadowBlur = baseLine * 2;
+      c.shadowColor = color;
+      c.lineWidth = baseLine;
+      drawShapePath(c, shape, cx, cy, size); c.stroke();
+      c.strokeStyle = "#FFFFFF";
+      c.lineWidth = Math.max(2, size * 0.006);
+      c.shadowBlur = 0;
+      drawShapePath(c, shape, cx, cy, size); c.stroke();
+    } else {
+      c.lineWidth = baseLine;
+      drawShapePath(c, shape, cx, cy, size); c.stroke();
+    }
+
+    c.restore();
+  };
+
+  const drawRingDecorationRect = (
+    c: CanvasRenderingContext2D,
+    style: string,
+    shape: string,
+    cx: number,
+    cy: number,
+    width: number,
+    height: number,
+    color: string,
+    palette: { c1: string; c2: string; c3?: string; c4?: string },
+    useGradient: boolean
+  ) => {
+    if (style === "none") return;
+    c.save();
+    c.lineJoin = "round";
+    c.lineCap = "round";
+
+    let gradient: CanvasGradient | null = null;
+    if (useGradient) {
+      gradient = c.createLinearGradient(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2);
+      applyGradientStops(gradient, palette.c1, palette.c2, palette.c3, palette.c4, Boolean(palette.c4));
+    }
+
+    c.strokeStyle = useGradient && gradient ? gradient : color;
+    const baseLine = Math.max(4, Math.min(width, height) * 0.04);
+
+    if (style === "dashed") {
+      c.setLineDash([baseLine * 2, baseLine * 2]);
+      c.lineWidth = baseLine;
+      drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
+    } else if (style === "double") {
+      c.lineWidth = baseLine * 0.4;
+      drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
+      drawShapePathRect(c, shape, cx, cy, width - baseLine * 1.5, height - baseLine * 1.5); c.stroke();
+    } else if (style === "glow") {
+      c.shadowBlur = baseLine * 2;
+      c.shadowColor = color;
+      c.lineWidth = baseLine;
+      drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
+      c.strokeStyle = "#FFFFFF";
+      c.lineWidth = Math.max(2, Math.min(width, height) * 0.006);
+      c.shadowBlur = 0;
+      drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
+    } else {
+      c.lineWidth = baseLine;
+      drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
+    }
+
+    c.restore();
+  };
+
+  const drawCenterOverlay = (c: CanvasRenderingContext2D, width: number, height: number) => {
+    if (!logoBase64 || centerOverlayMode === "none") return;
+    if (centerOverlayMode === "match" && !enableFrame) return;
+    const overlayStyle = centerOverlayMode === "match" && enableFrame ? ringStyle : centerOverlayStyle;
+    const overlayColor = centerOverlayMode === "match" && enableFrame ? ringColor : centerOverlayColor;
+    const overlayPalette = centerOverlayMode === "match" && enableFrame ? getRingPalette() : getCenterOverlayPalette();
+    const overlayUsesGradient = centerOverlayMode === "match" && enableFrame
+      ? (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")
+      : (centerOverlayStyle !== "solid" && centerOverlayStyle !== "none" && centerOverlayColorMode === "gradient");
+    if (overlayStyle === "none") return;
+    drawRingDecorationRect(c, overlayStyle, bgShape, width / 2, height / 2, width, height, overlayColor, overlayPalette, overlayUsesGradient);
+  };
+
+  const getPathPoint = (shape: string, progress: number, radius: number, cx = 400, cy = 400): { x: number; y: number; angle: number } => {
+    let x = cx, y = cy, angle = 0;
+
+    if (shape === "circle") {
+      const a = progress * Math.PI * 2 - Math.PI / 2;
+      x = cx + Math.cos(a) * radius;
+      y = cy + Math.sin(a) * radius;
+      angle = a + Math.PI / 2;
+    } else if (shape === "square") {
+      const side = radius * 2;
+      const p = (progress + 0.125) % 1; // Offset to start at top center
+      if (p < 0.25) { // Top
+        const f = p / 0.25;
+        x = cx - radius + f * side;
+        y = cy - radius;
+        angle = 0;
+      } else if (p < 0.5) { // Right
+        const f = (p - 0.25) / 0.25;
+        x = cx + radius;
+        y = cy - radius + f * side;
+        angle = Math.PI / 2;
+      } else if (p < 0.75) { // Bottom
+        const f = (p - 0.5) / 0.25;
+        x = cx + radius - f * side;
+        y = cy + radius;
+        angle = Math.PI;
+      } else { // Left
+        const f = (p - 0.75) / 0.25;
+        x = cx - radius;
+        y = cy + radius - f * side;
+        angle = -Math.PI / 2;
+      }
+    } else if (shape === "diamond") {
+      const p = (progress + 0.125) % 1;
+      const s = radius * Math.sqrt(2);
+      if (p < 0.25) { // Top-Right
+        const f = p / 0.25;
+        x = cx + f * radius;
+        y = cy - radius + f * radius;
+        angle = Math.PI / 4;
+      } else if (p < 0.5) { // Bottom-Right
+        const f = (p - 0.25) / 0.25;
+        x = cx + radius - f * radius;
+        y = cy + f * radius;
+        angle = 3 * Math.PI / 4;
+      } else if (p < 0.75) { // Bottom-Left
+        const f = (p - 0.5) / 0.25;
+        x = cx - f * radius;
+        y = cy + radius - f * radius;
+        angle = -3 * Math.PI / 4;
+      } else { // Top-Left
+        const f = (p - 0.75) / 0.25;
+        x = cx - radius + f * radius;
+        y = cy - f * radius;
+        angle = -Math.PI / 4;
+      }
+    } else if (shape === "octagon") {
+      const side = radius * 0.765; // side length for octagon inscribed in circle
+      const p = progress % 1;
+      const sector = Math.floor(p * 8);
+      const f = (p * 8) % 1;
+      const step = Math.PI / 4;
+      const startAngle = sector * step - Math.PI / 2 - step / 2;
+      const endAngle = startAngle + step;
+
+      const x1 = cx + Math.cos(startAngle) * radius;
+      const y1 = cy + Math.sin(startAngle) * radius;
+      const x2 = cx + Math.cos(endAngle) * radius;
+      const y2 = cy + Math.sin(endAngle) * radius;
+
+      x = x1 + f * (x2 - x1);
+      y = y1 + f * (y2 - y1);
+      angle = startAngle + step / 2 + Math.PI / 2;
+    } else {
+      // Default fallback (circle)
+      const a = progress * Math.PI * 2 - Math.PI / 2;
+      x = cx + Math.cos(a) * radius;
+      y = cy + Math.sin(a) * radius;
+      angle = a + Math.PI / 2;
+    }
+    return { x, y, angle };
+  };
+
   async function runGeneration() {
     showDogTagWarning = false;
     loading = true;
-    
-    let finalData = qrData;
-    if (dataType === "WiFi") {
-      finalData = `WIFI:S:${wifiSsid};T:WPA;P:${wifiPass};;`;
-    } else if (dataType === "DogTag") {
-      finalData = `PET:${petName}\nCHIP:${microchipNum}\nOWNER:${ownerName}\nTEL:${ownerPhone}\nADDR:${ownerAddr}`;
-    } else if (dataType === "vCard") {
-      finalData = `BEGIN:VCARD\nVERSION:3.0\nN:${vCardLast};${vCardFirst}\nFN:${vCardFirst} ${vCardLast}\nORG:${vCardOrg}\nTEL:${vCardPhone}\nEMAIL:${vCardEmail}\nEND:VCARD`;
-    } else if (dataType === "Email") {
-      finalData = `mailto:${emailTo}?subject=${encodeURIComponent(emailSub)}&body=${encodeURIComponent(emailBody)}`;
-    } else if (dataType === "SMS") {
-      finalData = `smsto:${smsPhone}:${smsMsg}`;
-    } else if (dataType === "Phone") {
-      finalData = `tel:${phoneNum}`;
-    } else if (dataType === "Geo") {
-      finalData = `geo:${geoLat},${geoLng}`;
-    } else if (dataType === "WhatsApp") {
-      finalData = `https://wa.me/${waPhone.replace(/\D/g, '')}?text=${encodeURIComponent(waMsg)}`;
-    } else if (dataType === "Crypto") {
-      finalData = buildCryptoPayload();
-    } else if (dataType === "Event") {
-      const cleanDate = (d: string) => {
-        if (!d) return "";
-        return d.replace(/[-:]/g, "") + "00";
-      };
-      finalData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${eventTitle}\nDTSTART:${cleanDate(eventStart)}\nDTEND:${cleanDate(eventEnd)}\nLOCATION:${eventLoc}\nEND:VEVENT\nEND:VCALENDAR`;
-    } else if (dataType === "Social") {
-      if (socialPlatform === "Facebook") finalData = `https://facebook.com/${socialUser}`;
-      else if (socialPlatform === "Instagram") finalData = `https://instagram.com/${socialUser}`;
-      else if (socialPlatform === "Twitter") finalData = `https://twitter.com/${socialUser}`;
-    } else if (dataType === "LinkedIn") {
-      finalData = `https://linkedin.com/in/${linkedinUser}`;
-    } else if (dataType === "YouTube") {
-      const h = ytHandle.startsWith("@") ? ytHandle : "@" + ytHandle;
-      finalData = `https://youtube.com/${h}`;
-    } else if (dataType === "TikTok") {
-      const u = tiktokUser.startsWith("@") ? tiktokUser : "@" + tiktokUser;
-      finalData = `https://tiktok.com/${u}`;
-    } else if (dataType === "Zoom") {
-      finalData = `https://zoom.us/j/${zoomMeetingId}${zoomPass ? "?pwd=" + zoomPass : ""}`;
-    }
+    const finalData = buildFinalQrData();
 
     try {
       const rustImageB64 = await invoke<string>("generate_ultra_qr", {
-        options: {
-          data: finalData,
-          color1: color1,
-          color2: color2,
-          color3: color3,
-          color4: useFourthStop ? color4 : undefined,
-          bgColor: bgColor,
-          eyeOut: eyeOut,
-          eyeIn: eyeIn,
-          fillType: fillType,
-          mainShape: mainShape,
-          bgShape: bgShape,
-          eyeShape: eyeShape,
-          logoB64: logoBase64,
-          logoSize: logoSizePercent,
-          logoOpacity: logoOpacityPercent
-        }
+        options: buildQrRenderOptions(finalData)
       });
 
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        const drawShapePath = (c: CanvasRenderingContext2D, s: string, cx: number, cy: number, sz: number) => {
-          c.beginPath();
-          if (s === "circle") {
-            c.arc(cx, cy, sz / 2, 0, Math.PI * 2);
-          } else if (s === "rounded") {
-            const r = sz * 0.2;
-            const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
-            c.moveTo(cx, top);
-            c.arcTo(right, top, right, bottom, r);
-            c.arcTo(right, bottom, left, bottom, r);
-            c.arcTo(left, bottom, left, top, r);
-            c.arcTo(left, top, right, top, r);
-            c.closePath();
-          } else if (s === "diamond") {
-            c.moveTo(cx, cy - sz / 2);
-            c.lineTo(cx + sz / 2, cy);
-            c.lineTo(cx, cy + sz / 2);
-            c.lineTo(cx - sz / 2, cy);
-            c.closePath();
-          } else if (s === "octagon") {
-            const side = sz * 0.28;
-            const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
-            c.moveTo(cx - side, top);
-            c.lineTo(cx + side, top);
-            c.lineTo(right, cy - side);
-            c.lineTo(right, cy + side);
-            c.lineTo(cx + side, bottom);
-            c.lineTo(cx - side, bottom);
-            c.lineTo(left, cy + side);
-            c.lineTo(left, cy - side);
-            c.closePath();
-          } else {
-            c.rect(cx - sz / 2, cy - sz / 2, sz, sz);
+        try {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            throw new Error("Preview canvas context could not be created.");
           }
-        };
+
+          const drawShapePath = (c: CanvasRenderingContext2D, s: string, cx: number, cy: number, sz: number) => {
+            c.beginPath();
+            if (s === "circle") {
+              c.arc(cx, cy, sz / 2, 0, Math.PI * 2);
+            } else if (s === "rounded") {
+              const r = sz * 0.2;
+              const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
+              c.moveTo(cx, top);
+              c.arcTo(right, top, right, bottom, r);
+              c.arcTo(right, bottom, left, bottom, r);
+              c.arcTo(left, bottom, left, top, r);
+              c.arcTo(left, top, right, top, r);
+              c.closePath();
+            } else if (s === "diamond") {
+              c.moveTo(cx, cy - sz / 2);
+              c.lineTo(cx + sz / 2, cy);
+              c.lineTo(cx, cy + sz / 2);
+              c.lineTo(cx - sz / 2, cy);
+              c.closePath();
+            } else if (s === "octagon") {
+              const side = sz * 0.28;
+              const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
+              c.moveTo(cx - side, top);
+              c.lineTo(cx + side, top);
+              c.lineTo(right, cy - side);
+              c.lineTo(right, cy + side);
+              c.lineTo(cx + side, bottom);
+              c.lineTo(cx - side, bottom);
+              c.lineTo(left, cy + side);
+              c.lineTo(left, cy - side);
+              c.closePath();
+            } else {
+              c.rect(cx - sz / 2, cy - sz / 2, sz, sz);
+            }
+          };
 
         const drawRingDecoration = (
           c: CanvasRenderingContext2D,
@@ -1121,7 +1502,7 @@
           c.restore();
         };
 
-        const drawCenterOverlay = (c: CanvasRenderingContext2D, size: number) => {
+        const drawCenterOverlay = (c: CanvasRenderingContext2D, width: number, height: number) => {
           if (!logoBase64 || centerOverlayMode === "none") return;
           if (centerOverlayMode === "match" && !enableFrame) return;
           const overlayStyle = centerOverlayMode === "match" && enableFrame ? ringStyle : centerOverlayStyle;
@@ -1131,17 +1512,33 @@
             ? (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")
             : (centerOverlayStyle !== "solid" && centerOverlayStyle !== "none" && centerOverlayColorMode === "gradient");
           if (overlayStyle === "none") return;
-          drawRingDecoration(c, overlayStyle, bgShape, canvas.width / 2, canvas.height / 2, size, overlayColor, overlayPalette, overlayUsesGradient);
-        };
-
-        const getCenterOverlaySize = (renderedQrSize: number) => {
-          const logoRenderedSize = renderedQrSize * (logoSizePercent / 100);
-          return Math.max(24, logoRenderedSize - Math.max(2, logoRenderedSize * 0.02));
+          drawRingDecorationRect(c, overlayStyle, bgShape, canvas.width / 2, canvas.height / 2, width, height, overlayColor, overlayPalette, overlayUsesGradient);
         };
 
         if (enableFrame) {
           canvas.width = 800;
           canvas.height = 800;
+
+          const frameRingSize = 700;
+          const getFrameRingClearance = (style: string, textSize: number) => {
+            const baseLine = Math.max(4, frameRingSize * 0.034);
+            let ringInset = baseLine / 2;
+
+            if (style === "double") {
+              ringInset = frameRingSize * 0.034 + Math.max(2, frameRingSize * 0.012) / 2;
+            } else if (style === "diamond") {
+              ringInset = Math.max(6, frameRingSize * 0.034) / 2 + 8;
+            } else if (style === "neon") {
+              ringInset = Math.max(4, frameRingSize * 0.028) / 2 + 10;
+            }
+
+            return ringInset + textSize * 0.65 + 10;
+          };
+
+          const getCurvedTextRadius = (requestedRadius: number, textSize: number) => {
+            const safeRadius = frameRingSize / 2 - getFrameRingClearance(ringStyle, textSize);
+            return Math.max(200, Math.min(requestedRadius, safeRadius));
+          };
 
           ctx.save();
           drawShapePath(ctx, bgShape, 400, 400, 800);
@@ -1159,7 +1556,7 @@
             bgShape,
             400,
             400,
-            700,
+            frameRingSize,
             ringColor,
             getRingPalette(),
             ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient"
@@ -1177,110 +1574,297 @@
           const qrOffset = (800 - qrSize) / 2;
 
           ctx.drawImage(img, qrOffset, qrOffset, qrSize, qrSize);
-          drawCenterOverlay(ctx, getCenterOverlaySize(qrSize));
+          const overlayDimensions = getCenterOverlayDimensions(qrSize);
+          drawCenterOverlay(ctx, overlayDimensions.width, overlayDimensions.height);
           ctx.restore();
 
-          if (frameText) {
-            ctx.save();
-            ctx.font = "bold 44px 'Segoe UI', Arial, sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            const textWidth = ctx.measureText(frameText.toUpperCase()).width;
-            const badgeWidth = textWidth + 80;
-            const badgeHeight = 70;
-            
-            let badgeY = 675;
-            if (bgShape === "diamond") badgeY = 630;
-            else if (bgShape === "octagon") badgeY = 660;
+          if (frameText || frameTextTop) {
+            const getPathPoint = (shape: string, progress: number, radius: number): { x: number; y: number; angle: number } => {
+              const cx = 400, cy = 400;
+              let x = cx, y = cy, angle = 0;
 
-            if (!transparentTextBg) {
-              ctx.fillStyle = bgColor;
-              if (matchTextStyle && ringStyle === "neon") {
-                ctx.shadowColor = ringColor;
-                ctx.shadowBlur = 20;
-              }
-
-              // Draw badge background
-              const bx = 400 - badgeWidth / 2;
-              const by = badgeY - badgeHeight / 2;
-              if (matchTextStyle && (ringStyle === "rounded" || bgShape === "rounded")) {
-                const r = 15;
-                ctx.beginPath();
-                ctx.moveTo(bx + r, by);
-                ctx.lineTo(bx + badgeWidth - r, by);
-                ctx.quadraticCurveTo(bx + badgeWidth, by, bx + badgeWidth, by + r);
-                ctx.lineTo(bx + badgeWidth, by + badgeHeight - r);
-                ctx.quadraticCurveTo(bx + badgeWidth, by + badgeHeight, bx + badgeWidth - r, by + badgeHeight);
-                ctx.lineTo(bx + r, by + badgeHeight);
-                ctx.quadraticCurveTo(bx, by + badgeHeight, bx, by + badgeHeight - r);
-                ctx.lineTo(bx, by + r);
-                ctx.quadraticCurveTo(bx, by, bx + r, by);
-                ctx.closePath();
-                ctx.fill();
-              } else {
-                ctx.fillRect(bx, by, badgeWidth, badgeHeight);
-              }
-
-              // Optional badge border if matching
-              if (matchTextStyle) {
-                ctx.shadowBlur = 0;
-                ctx.strokeStyle = ringColor;
-                ctx.lineWidth = 3;
-                if (ringStyle === "dotted") ctx.setLineDash([2, 6]);
-                else if (ringStyle === "dashed") ctx.setLineDash([12, 6]);
-                else if (ringStyle === "double") ctx.lineWidth = 1;
+              if (shape === "circle") {
+                const a = progress * Math.PI * 2 - Math.PI / 2;
+                x = cx + Math.cos(a) * radius;
+                y = cy + Math.sin(a) * radius;
+                angle = a + Math.PI / 2;
+              } else if (shape === "square") {
+                const side = radius * 2;
+                const p = (progress + 0.125) % 1; // Offset to start at top center
+                if (p < 0.25) { // Top
+                  const f = p / 0.25;
+                  x = cx - radius + f * side;
+                  y = cy - radius;
+                  angle = 0;
+                } else if (p < 0.5) { // Right
+                  const f = (p - 0.25) / 0.25;
+                  x = cx + radius;
+                  y = cy - radius + f * side;
+                  angle = Math.PI / 2;
+                } else if (p < 0.75) { // Bottom
+                  const f = (p - 0.5) / 0.25;
+                  x = cx + radius - f * side;
+                  y = cy + radius;
+                  angle = Math.PI;
+                } else { // Left
+                  const f = (p - 0.75) / 0.25;
+                  x = cx - radius;
+                  y = cy + radius - f * side;
+                  angle = -Math.PI / 2;
+                }
+              } else if (shape === "diamond") {
+                const p = (progress + 0.125) % 1;
+                const s = radius * Math.sqrt(2);
+                if (p < 0.25) { // Top-Right
+                  const f = p / 0.25;
+                  x = cx + f * radius;
+                  y = cy - radius + f * radius;
+                  angle = Math.PI / 4;
+                } else if (p < 0.5) { // Bottom-Right
+                  const f = (p - 0.25) / 0.25;
+                  x = cx + radius - f * radius;
+                  y = cy + f * radius;
+                  angle = 3 * Math.PI / 4;
+                } else if (p < 0.75) { // Bottom-Left
+                  const f = (p - 0.5) / 0.25;
+                  x = cx - f * radius;
+                  y = cy + radius - f * radius;
+                  angle = -3 * Math.PI / 4;
+                } else { // Top-Left
+                  const f = (p - 0.75) / 0.25;
+                  x = cx - radius + f * radius;
+                  y = cy - f * radius;
+                  angle = -Math.PI / 4;
+                }
+              } else if (shape === "octagon") {
+                const p = progress % 1;
+                const side = radius * 0.28 * 2;
+                const corner = (radius - radius * 0.28);
+                // Simplified octagon path: 8 segments
+                const seg = Math.floor(p * 8);
+                const f = (p * 8) % 1;
+                const pts = [
+                  {x: cx-radius*0.28, y: cy-radius, a: 0},
+                  {x: cx+radius*0.28, y: cy-radius, a: Math.PI/4},
+                  {x: cx+radius, y: cy-radius*0.28, a: Math.PI/2},
+                  {x: cx+radius, y: cy+radius*0.28, a: 3*Math.PI/4},
+                  {x: cx+radius*0.28, y: cy+radius, a: Math.PI},
+                  {x: cx-radius*0.28, y: cy+radius, a: -3*Math.PI/4},
+                  {x: cx-radius, y: cy+radius*0.28, a: -Math.PI/2},
+                  {x: cx-radius, y: cy-radius*0.28, a: -Math.PI/4}
+                ];
+                const p1 = pts[seg];
+                const p2 = pts[(seg+1)%8];
+                x = p1.x + (p2.x - p1.x) * f;
+                y = p1.y + (p2.y - p1.y) * f;
+                angle = p1.a;
+              } else if (shape === "rounded") {
+                const r = radius * 0.2;
+                const side = (radius - r) * 2;
+                const arcLen = Math.PI * r / 2;
+                const totalLen = 4 * side + 4 * arcLen;
+                let d = progress * totalLen;
                 
-                if (ringStyle !== "none" && ringStyle !== "neon" && ringStyle !== "gradient") {
-                  if (ringStyle === "rounded" || bgShape === "rounded") {
-                     ctx.stroke();
-                     if (ringStyle === "double") {
-                        ctx.save();
-                        ctx.translate(2, 2); ctx.scale((badgeWidth-4)/badgeWidth, (badgeHeight-4)/badgeHeight);
-                        ctx.stroke();
-                        ctx.restore();
-                     }
+                // Start from top center
+                d = (d + side / 2 + totalLen) % totalLen;
+
+                if (d < side) { // Top side
+                  x = cx - (radius-r) + d; y = cy - radius; angle = 0;
+                } else if (d < side + arcLen) { // Top-right arc
+                  const a = (d - side) / arcLen * (Math.PI/2) - Math.PI/2;
+                  x = cx + (radius-r) + Math.cos(a) * r;
+                  y = cy - (radius-r) + Math.sin(a) * r;
+                  angle = a + Math.PI/2;
+                } else if (d < 2*side + arcLen) { // Right side
+                  x = cx + radius; y = cy - (radius-r) + (d - side - arcLen); angle = Math.PI/2;
+                } else if (d < 2*side + 2*arcLen) { // Bottom-right arc
+                  const a = (d - 2*side - arcLen) / arcLen * (Math.PI/2);
+                  x = cx + (radius-r) + Math.cos(a) * r;
+                  y = cy + (radius-r) + Math.sin(a) * r;
+                  angle = a + Math.PI/2;
+                } else if (d < 3*side + 2*arcLen) { // Bottom side
+                  x = cx + (radius-r) - (d - 2*side - 2*arcLen); y = cy + radius; angle = Math.PI;
+                } else if (d < 3*side + 3*arcLen) { // Bottom-left arc
+                  const a = (d - 3*side - 2*arcLen) / arcLen * (Math.PI/2) + Math.PI/2;
+                  x = cx - (radius-r) + Math.cos(a) * r;
+                  y = cy + (radius-r) + Math.sin(a) * r;
+                  angle = a + Math.PI/2;
+                } else if (d < 4*side + 3*arcLen) { // Left side
+                  x = cx - radius; y = cy + (radius-r) - (d - 3*side - 3*arcLen); angle = -Math.PI/2;
+                } else { // Top-left arc
+                  const a = (d - 4*side - 3*arcLen) / arcLen * (Math.PI/2) + Math.PI;
+                  x = cx - (radius-r) + Math.cos(a) * r;
+                  y = cy - (radius-r) + Math.sin(a) * r;
+                  angle = a + Math.PI/2;
+                }
+              } else {
+                // Default to circle if shape unknown
+                const a = progress * Math.PI * 2 - Math.PI / 2;
+                x = cx + Math.cos(a) * radius;
+                y = cy + Math.sin(a) * radius;
+                angle = a + Math.PI / 2;
+              }
+
+              return { x, y, angle };
+            };
+
+            const drawText = (text: string, isTop: boolean) => {
+              if (!text) return;
+              
+              const currentSize = isTop ? frameTextTopSize : frameTextSize;
+              const currentColor = isTop ? frameTextTopColor : frameTextColor;
+              const currentMatchStyle = isTop ? matchTextTopStyle : matchTextStyle;
+              const currentTransparentBg = isTop ? transparentTextTopBg : transparentTextBg;
+              const currentMode = isTop ? frameTextTopMode : frameTextMode;
+              const currentRadius = isTop ? frameTextTopRadius : frameTextRadius;
+              const currentSpacing = isTop ? frameTextTopSpacing : frameTextSpacing;
+
+              ctx.save();
+              ctx.font = `bold ${currentSize}px 'Segoe UI', Arial, sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              
+              if (currentMode === "curved") {
+                const curvedRadius = getCurvedTextRadius(currentRadius, currentSize);
+                const chars = text.toUpperCase().split("");
+                const charWidths = chars.map(c => ctx.measureText(c).width + currentSpacing);
+                const totalTextWidth = charWidths.reduce((a, b) => a + b, 0);
+                
+                // For curved, we need to find the total perimeter of the shape to map width to progress
+                // Simplified: use a circle's perimeter as a reference or calculate per shape
+                let perimeter = 2 * Math.PI * curvedRadius;
+                if (bgShape === "square") perimeter = 8 * curvedRadius;
+                else if (bgShape === "diamond") perimeter = 4 * curvedRadius * Math.sqrt(2);
+                else if (bgShape === "octagon") perimeter = 8 * curvedRadius * 0.828; // approx
+                else if (bgShape === "rounded") {
+                   const side = (curvedRadius - curvedRadius * 0.2) * 2;
+                   const arc = Math.PI * (curvedRadius * 0.2) / 2;
+                   perimeter = 4 * side + 4 * arc;
+                }
+
+                const widthToProgress = 1 / perimeter;
+                const direction = isTop ? 1 : -1;
+                const startProgress = isTop
+                  ? -(totalTextWidth / 2) * widthToProgress
+                  : 0.5 + (totalTextWidth / 2) * widthToProgress;
+
+                let currentProgress = startProgress;
+                chars.forEach((char, i) => {
+                  const charProgress = currentProgress + direction * (charWidths[i] / 2) * widthToProgress;
+                  const { x, y, angle } = getPathPoint(bgShape, charProgress, curvedRadius);
+                  
+                  ctx.save();
+                  ctx.translate(x, y);
+                  ctx.rotate(isTop ? angle : angle + Math.PI);
+                  
+                  // Apply color for each character
+                  applyTextColor(totalTextWidth, currentMatchStyle, currentColor, true);
+                  ctx.fillText(char, 0, 0);
+                  ctx.restore();
+                  
+                  currentProgress += direction * charWidths[i] * widthToProgress;
+                });
+              } else {
+                // Ensure coordinates are absolute for flat text
+                ctx.setTransform(1, 0, 0, 1, 0, 0); 
+                
+                const textWidth = ctx.measureText(text.toUpperCase()).width;
+
+                let badgeY = isTop ? 100 : 700;
+                if (bgShape === "diamond") badgeY = isTop ? 160 : 640;
+                else if (bgShape === "octagon") badgeY = isTop ? 130 : 670;
+                else if (bgShape === "rounded") badgeY = isTop ? 110 : 690;
+                else if (bgShape === "circle") badgeY = isTop ? 100 : 700;
+
+                const badgeWidth = textWidth + 80;
+                const badgeHeight = 70;
+
+                if (!currentTransparentBg) {
+                  ctx.fillStyle = bgColor;
+                  if (currentMatchStyle && ringStyle === "neon") {
+                    ctx.shadowColor = ringColor;
+                    ctx.shadowBlur = 20;
+                  }
+
+                  const bx = 400 - badgeWidth / 2;
+                  const by = badgeY - badgeHeight / 2;
+                  if (currentMatchStyle && (ringStyle === "rounded" || bgShape === "rounded")) {
+                    const r = 15;
+                    ctx.beginPath();
+                    ctx.moveTo(bx + r, by);
+                    ctx.lineTo(bx + badgeWidth - r, by);
+                    ctx.quadraticCurveTo(bx + badgeWidth, by, bx + badgeWidth, by + r);
+                    ctx.lineTo(bx + badgeWidth, by + badgeHeight - r);
+                    ctx.quadraticCurveTo(bx + badgeWidth, by + badgeHeight, bx + badgeWidth - r, by + badgeHeight);
+                    ctx.lineTo(bx + r, by + badgeHeight);
+                    ctx.quadraticCurveTo(bx, by + badgeHeight, bx, by + badgeHeight - r);
+                    ctx.lineTo(bx, by + r);
+                    ctx.quadraticCurveTo(bx, by, bx + r, by);
+                    ctx.closePath();
+                    ctx.fill();
                   } else {
-                     ctx.strokeRect(bx, by, badgeWidth, badgeHeight);
-                     if (ringStyle === "double") {
-                       ctx.strokeRect(bx + 5, by + 5, badgeWidth - 10, badgeHeight - 10);
-                     }
+                    ctx.fillRect(bx, by, badgeWidth, badgeHeight);
+                  }
+
+                  if (currentMatchStyle) {
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = ringColor;
+                    ctx.lineWidth = 3;
+                    if (ringStyle === "dotted") ctx.setLineDash([2, 6]);
+                    else if (ringStyle === "dashed") ctx.setLineDash([12, 6]);
+                    else if (ringStyle === "double") ctx.lineWidth = 1;
+
+                    if (ringStyle !== "none" && ringStyle !== "neon" && ringStyle !== "gradient") {
+                      if (ringStyle === "rounded" || bgShape === "rounded") {
+                        ctx.stroke();
+                        if (ringStyle === "double") {
+                          ctx.save();
+                          ctx.translate(2, 2); ctx.scale((badgeWidth-4)/badgeWidth, (badgeHeight-4)/badgeHeight);
+                          ctx.stroke();
+                          ctx.restore();
+                        }
+                      } else {
+                        ctx.strokeRect(bx, by, badgeWidth, badgeHeight);
+                        if (ringStyle === "double") {
+                          ctx.strokeRect(bx + 5, by + 5, badgeWidth - 10, badgeHeight - 10);
+                        }
+                      }
+                    }
+                    ctx.setLineDash([]);
                   }
                 }
-                ctx.setLineDash([]);
+
+                applyTextColor(textWidth, currentMatchStyle, currentColor);
+                ctx.fillText(text.toUpperCase(), 400, badgeY);
               }
-            }
-            
-            // Text color logic
-            if (matchTextStyle) {
-              if (ringStyle === "gradient" || (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")) {
-                const grad = ctx.createLinearGradient(400 - textWidth/2, 0, 400 + textWidth/2, 0);
-                const ringPalette = getRingPalette();
-                applyGradientStops(grad, ringPalette.c1, ringPalette.c2, ringPalette.c3, ringPalette.c4, Boolean(ringPalette.c4));
-                ctx.fillStyle = grad;
-              } else if (ringStyle === "neon") {
-                ctx.fillStyle = "#FFFFFF";
-                ctx.shadowColor = ringColor;
-                ctx.shadowBlur = 10;
-              } else if (ringStyle === "diamond") {
-                ctx.fillStyle = ringColor;
-                // Add tiny diamonds next to text?
-                ctx.save();
-                ctx.translate(400 - textWidth/2 - 25, badgeY);
-                ctx.rotate(Math.PI/4); ctx.fillRect(-8, -8, 16, 16);
-                ctx.restore();
-                ctx.save();
-                ctx.translate(400 + textWidth/2 + 25, badgeY);
-                ctx.rotate(Math.PI/4); ctx.fillRect(-8, -8, 16, 16);
-                ctx.restore();
+              ctx.restore();
+            };
+
+            const applyTextColor = (textWidth: number, currentMatchStyle: boolean, currentColor: string, isCurved = false) => {
+              if (currentMatchStyle) {
+                if (ringStyle === "gradient" || (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")) {
+                  const gradX0 = isCurved ? -textWidth / 2 : 400 - textWidth / 2;
+                  const gradX1 = isCurved ? textWidth / 2 : 400 + textWidth / 2;
+                  const grad = ctx.createLinearGradient(gradX0, 0, gradX1, 0);
+                  const ringPalette = getRingPalette();
+                  applyGradientStops(grad, ringPalette.c1, ringPalette.c2, ringPalette.c3, ringPalette.c4, Boolean(ringPalette.c4));
+                  ctx.fillStyle = grad;
+                } else if (ringStyle === "neon") {
+                  ctx.fillStyle = "#FFFFFF";
+                  ctx.shadowColor = ringColor;
+                  ctx.shadowBlur = 10;
+                } else if (ringStyle === "diamond") {
+                  ctx.fillStyle = ringColor;
+                } else {
+                  ctx.fillStyle = currentColor;
+                }
               } else {
-                ctx.fillStyle = frameTextColor;
+                ctx.fillStyle = currentColor;
               }
-            } else {
-              ctx.fillStyle = frameTextColor;
-            }
-            
-            ctx.fillText(frameText.toUpperCase(), 400, badgeY);
-            ctx.restore();
+            };
+
+            drawText(frameTextTop, true);
+            drawText(frameText, false);
           }
           ctx.restore();
         } else {
@@ -1350,27 +1934,39 @@
             ctx.fillRect(0, 0, 600, 600);
             ctx.drawImage(img, 0, 0, 600, 600);
           }
-          drawCenterOverlay(ctx, getCenterOverlaySize(baseQrCanvasSize));
+          const overlayDimensions = getCenterOverlayDimensions(baseQrCanvasSize);
+          drawCenterOverlay(ctx, overlayDimensions.width, overlayDimensions.height);
         }
 
-        qrImagePng = canvas.toDataURL("image/png");
-        
-        const jpgCanvas = document.createElement("canvas");
-        jpgCanvas.width = canvas.width;
-        jpgCanvas.height = canvas.height;
-        const jctx = jpgCanvas.getContext("2d");
-        if (!jctx) return;
-        jctx.fillStyle = "#FFFFFF"; 
-        jctx.fillRect(0, 0, jpgCanvas.width, jpgCanvas.height);
-        jctx.drawImage(canvas, 0, 0);
-        
-        qrImageJpg = jpgCanvas.toDataURL("image/jpeg", 1.0);
-        generatedPayload = finalData;
-        generatedLabel = getGeneratedLabel();
-        if (!printTitle.trim() || printTitle.trim() === generatedLabel.trim()) {
-          printTitle = generatedLabel;
+          qrImagePng = canvas.toDataURL("image/png");
+
+          const jpgCanvas = document.createElement("canvas");
+          jpgCanvas.width = canvas.width;
+          jpgCanvas.height = canvas.height;
+          const jctx = jpgCanvas.getContext("2d");
+          if (!jctx) {
+            throw new Error("JPEG export canvas context could not be created.");
+          }
+          jctx.fillStyle = "#FFFFFF";
+          jctx.fillRect(0, 0, jpgCanvas.width, jpgCanvas.height);
+          jctx.drawImage(canvas, 0, 0);
+
+          qrImageJpg = jpgCanvas.toDataURL("image/jpeg", 1.0);
+          generatedPayload = finalData;
+          generatedLabel = getGeneratedLabel();
+          if (!printTitle.trim() || printTitle.trim() === generatedLabel.trim()) {
+            printTitle = generatedLabel;
+          }
+          generatedAt = new Date().toLocaleString();
+        } catch (e: any) {
+          console.error(e);
+          showSaveToastMessage("Error generating QR preview: " + (e?.message || e), "error");
+        } finally {
+          loading = false;
         }
-        generatedAt = new Date().toLocaleString();
+      };
+      img.onerror = () => {
+        showSaveToastMessage("Error generating QR preview: generated image could not be loaded.", "error");
         loading = false;
       };
       img.src = rustImageB64;
@@ -1379,6 +1975,106 @@
       showSaveToastMessage("Error generating QR: " + (e.message || e), "error");
       loading = false;
     }
+  }
+
+  function buildFinalQrData() {
+    let finalData = qrData;
+    if (dataType === "WiFi") {
+      finalData = `WIFI:S:${wifiSsid};T:WPA;P:${wifiPass};;`;
+    } else if (dataType === "DogTag") {
+      finalData = `PET:${petName}\nCHIP:${microchipNum}\nOWNER:${ownerName}\nTEL:${ownerPhone}\nADDR:${ownerAddr}`;
+    } else if (dataType === "vCard") {
+      finalData = `BEGIN:VCARD\nVERSION:3.0\nN:${vCardLast};${vCardFirst}\nFN:${vCardFirst} ${vCardLast}\nORG:${vCardOrg}\nTEL:${vCardPhone}\nEMAIL:${vCardEmail}\nEND:VCARD`;
+    } else if (dataType === "Email") {
+      finalData = `mailto:${emailTo}?subject=${encodeURIComponent(emailSub)}&body=${encodeURIComponent(emailBody)}`;
+    } else if (dataType === "SMS") {
+      finalData = `smsto:${smsPhone}:${smsMsg}`;
+    } else if (dataType === "Phone") {
+      finalData = `tel:${phoneNum}`;
+    } else if (dataType === "Geo") {
+      finalData = `geo:${geoLat},${geoLng}`;
+    } else if (dataType === "WhatsApp") {
+      finalData = `https://wa.me/${waPhone.replace(/\D/g, '')}?text=${encodeURIComponent(waMsg)}`;
+    } else if (dataType === "Crypto") {
+      finalData = buildCryptoPayload();
+    } else if (dataType === "Event") {
+      const cleanDate = (d: string) => {
+        if (!d) return "";
+        return d.replace(/[-:]/g, "") + "00";
+      };
+      finalData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${eventTitle}\nDTSTART:${cleanDate(eventStart)}\nDTEND:${cleanDate(eventEnd)}\nLOCATION:${eventLoc}\nEND:VEVENT\nEND:VCALENDAR`;
+    } else if (dataType === "Social") {
+      if (socialPlatform === "Facebook") finalData = `https://facebook.com/${socialUser}`;
+      else if (socialPlatform === "Instagram") finalData = `https://instagram.com/${socialUser}`;
+      else if (socialPlatform === "Twitter") finalData = `https://twitter.com/${socialUser}`;
+    } else if (dataType === "LinkedIn") {
+      finalData = `https://linkedin.com/in/${linkedinUser}`;
+    } else if (dataType === "YouTube") {
+      const h = ytHandle.startsWith("@") ? ytHandle : "@" + ytHandle;
+      finalData = `https://youtube.com/${h}`;
+    } else if (dataType === "TikTok") {
+      const u = tiktokUser.startsWith("@") ? tiktokUser : "@" + tiktokUser;
+      finalData = `https://tiktok.com/${u}`;
+    } else if (dataType === "Zoom") {
+      finalData = `https://zoom.us/j/${zoomMeetingId}${zoomPass ? "?pwd=" + zoomPass : ""}`;
+    }
+
+    return finalData;
+  }
+
+  function buildQrRenderOptions(finalData: string) {
+    return {
+      data: finalData,
+      color1,
+      color2,
+      color3,
+      color4: useFourthStop ? color4 : undefined,
+      bgColor,
+      eyeOut,
+      eyeIn,
+      fillType,
+      mainShape,
+      bgShape,
+      eyeShape,
+      logoB64: logoBase64 || undefined,
+      logoSize: logoSizePercent,
+      logoOpacity: logoOpacityPercent,
+      enableFrame,
+      frameText,
+      frameTextTop,
+      frameTextMode,
+      frameTextTopMode,
+      frameTextRadius,
+      frameTextTopRadius,
+      frameTextSpacing,
+      frameTextTopSpacing,
+      frameTextSize,
+      frameTextTopSize,
+      frameTextColor,
+      frameTextTopColor,
+      matchTextStyle,
+      matchTextTopStyle,
+      transparentTextBg,
+      transparentTextTopBg,
+      transparentFrameBg,
+      ringStyle,
+      ringColor,
+      ringColor2,
+      ringColor3,
+      ringColor4,
+      ringUseFourthStop,
+      ringGradientMode,
+      ringColorMode,
+      centerOverlayMode,
+      centerOverlayStyle,
+      centerOverlayColor,
+      centerOverlayColor2,
+      centerOverlayColor3,
+      centerOverlayColor4,
+      centerOverlayUseFourthStop,
+      centerOverlayGradientMode,
+      centerOverlayColorMode
+    };
   }
 
   $: if (typeof document !== 'undefined') {
@@ -1489,32 +2185,7 @@
     <header class="lovely-header">
       <div class="logo-area">
         <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
-            <defs>
-              <linearGradient id="LovelyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#21d4fd" />
-                <stop offset="35%" stop-color="#b721ff" />
-                <stop offset="65%" stop-color="#ff1a92" />
-                <stop offset="100%" stop-color="#ffd700" />
-              </linearGradient>
-            </defs>
-            <path d="M22,10 H12 A2,2 0 0 0 10,12 V22" stroke-width="4" stroke="url(#LovelyGradient)" fill="none" />
-            <path d="M78,10 H88 A2,2 0 0 1 90,12 V22" stroke-width="4" stroke="url(#LovelyGradient)" fill="none" />
-            <path d="M22,90 H12 A2,2 0 0 1 10,88 V78" stroke-width="4" stroke="url(#LovelyGradient)" fill="none" />
-            <path d="M78,90 H88 A2,2 0 0 0 90,88 V78" stroke-width="4" stroke="url(#LovelyGradient)" fill="none" />
-            <g transform="translate(20, 20) scale(0.6)" fill="url(#LovelyGradient)" >
-              <path d="M50,0 C65.5,0,78.2,12.7,78.2,28.2 C78.2,38.5,72.6,47.7,64.1,52.8 L64.1,72.3 C64.1,76.5,60.7,80,56.5,80 L43.5,80 C39.3,80,35.9,76.5,35.9,72.3 L35.9,52.8 C27.4,47.7,21.8,38.5,21.8,28.2 C21.8,12.7,34.5,0,50,0 M50,11.3 C40.7,11.3,33.1,18.9,33.1,28.2 C33.1,34.1,36.2,39.3,40.7,42.4 C42.1,43.3,42.9,44.9,42.9,46.5 L42.9,68.7 L57.1,68.7 L57.1,46.5 C57.1,44.9,57.9,43.3,59.3,42.4 C63.8,39.3,66.9,34.1,66.9,28.2 C66.9,18.9,59.3,11.3,50,11.3"/>
-              <circle cx="50" cy="28.2" r="14.1" fill="none" stroke-width="4" stroke="url(#LovelyGradient)"/>
-              <path d="M50,28.2 L35.9,28.2" stroke-width="4" stroke="url(#LovelyGradient)"/>
-              <path d="M50,28.2 L50,42.3" stroke-width="4" stroke="url(#LovelyGradient)"/>
-              <g transform="translate(68, 68) scale(0.18)" fill="#00FF7F">
-                <path d="M50,0 C65,0,80,15,80,30 C80,45,65,60,50,60 C35,60,20,45,20,30 C20,15,35,0,50,0"/>
-                <path d="M50,40 C65,40,80,55,80,70 C80,85,65,100,50,100 C35,100,20,85,20,70 C20,55,35,40,50,40"/>
-                <path d="M0,50 C0,35,15,20,30,20 C45,20,60,35,60,50 C60,65,45,80,30,80 C15,80,0,65,0,50"/>
-                <path d="M45,80 V100" stroke-width="6" stroke="#00FF7F"/>
-              </g>
-            </g>
-          </svg>
+          <img src="/app-icon.png" alt="QR Studio Ultra logo" />
         </div>
         <div class="logo-text">
           <h1>QR STUDIO <span class="ultra">ULTRA</span></h1>
@@ -1678,8 +2349,6 @@
             <option value="square">Outer: Square</option>
             <option value="circle">Outer: Round Sticker</option>
             <option value="rounded">Outer: Rounded Square</option>
-            <option value="diamond">Outer: Diamond</option>
-            <option value="octagon">Outer: Octagon</option>
           </select>
         </div>
 
@@ -1688,7 +2357,6 @@
             <option value="square">Square Blocks</option>
             <option value="circle">Dots (Circles)</option>
             <option value="rounded">Rounded Blocks</option>
-            <option value="diamond">Diamond Blocks</option>
           </select>
           <select bind:value={fillType}>
             <option value="Solid">Solid Color</option>
@@ -1752,12 +2420,19 @@
         <select bind:value={eyeShape} class="full-width">
           <option value="square">Square Eyes</option>
           <option value="circle">Circular Eyes</option>
-          <option value="diamond">Diamond Eyes</option>
           <option value="rounded">Rounded Eyes</option>
         </select>
         <div class="row split color-row mt-10">
-          <label>Outer <input type="color" bind:value={eyeOut} /> <input type="text" bind:value={eyeOut} class="hex-input" on:blur={(event) => onHexBlur('eyeOut', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('eyeOut')}>Pick</button></label>
-          <label>Inner <input type="color" bind:value={eyeIn} /> <input type="text" bind:value={eyeIn} class="hex-input" on:blur={(event) => onHexBlur('eyeIn', event)}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('eyeIn')}>Pick</button></label>
+          <label>Outer
+            <input type="color" bind:value={eyeOut} />
+            <input type="text" bind:value={eyeOut} class="hex-input" on:blur={(event) => onHexBlur('eyeOut', event)}/>
+            <button class="mini-color-btn" type="button" on:click={() => pickColorInto('eyeOut')}>Pick</button>
+          </label>
+          <label>Inner
+            <input type="color" bind:value={eyeIn} />
+            <input type="text" bind:value={eyeIn} class="hex-input" on:blur={(event) => onHexBlur('eyeIn', event)}/>
+            <button class="mini-color-btn" type="button" on:click={() => pickColorInto('eyeIn')}>Pick</button>
+          </label>
         </div>
       </fieldset>
 
@@ -1766,20 +2441,90 @@
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={enableFrame} /> Enable Ring Overlay
         </label>
-        <div class="row split">
+        <div class="row split mt-5">
           <label class="checkbox-label" style="font-size: 0.85rem; margin-bottom: 12px;">
-            <input type="checkbox" bind:checked={transparentFrameBg} disabled={!enableFrame} /> Transparent Frame BG
-          </label>
-          <label class="checkbox-label" style="font-size: 0.85rem; margin-bottom: 12px;">
-            <input type="checkbox" bind:checked={transparentTextBg} disabled={!enableFrame} /> Transparent Text BG
+            <input type="checkbox" bind:checked={transparentFrameBg} disabled={!enableFrame} /> Transparent Ring BG
           </label>
         </div>
-        <div class="row split">
-          <label class="checkbox-label" style="font-size: 0.85rem; margin-bottom: 12px;">
-            <input type="checkbox" bind:checked={matchTextStyle} disabled={!enableFrame} /> Match Text to Style
-          </label>
+        <div class="row split mt-5">
+          <input type="text" bind:value={frameTextTop} placeholder="Top Text (Optional)" disabled={!enableFrame} />
         </div>
-        <input type="text" bind:value={frameText} placeholder="Scan Me" disabled={!enableFrame} />
+
+        <div class="sub-panel mt-10 mb-10" style="background: rgba(0,0,0,0.03); border-radius: 8px; padding: 10px;">
+          <p class="sub-label" style="font-weight: bold; margin-bottom: 8px;">Top Text Settings</p>
+          <div class="row split">
+            <label class="checkbox-label" style="font-size: 0.85rem;">
+              <input type="checkbox" bind:checked={transparentTextTopBg} disabled={!enableFrame} /> Transparent BG
+            </label>
+            <label class="checkbox-label" style="font-size: 0.85rem;">
+              <input type="checkbox" bind:checked={matchTextTopStyle} disabled={!enableFrame} /> Match Style
+            </label>
+          </div>
+          <div class="row split mt-5">
+            <select bind:value={frameTextTopMode} disabled={!enableFrame} style="font-size: 0.8rem; height: 32px;">
+              <option value="flat">Flat Text</option>
+              <option value="curved">Conform to Shape</option>
+            </select>
+          </div>
+          {#if frameTextTopMode === 'curved'}
+          <div class="row mt-5">
+            <label style="font-size: 0.75rem; flex:1;">Distance
+              <input type="range" min="200" max="450" bind:value={frameTextTopRadius} disabled={!enableFrame} />
+            </label>
+            <label style="font-size: 0.75rem; flex:1;">Spacing
+              <input type="range" min="-10" max="50" bind:value={frameTextTopSpacing} disabled={!enableFrame} />
+            </label>
+          </div>
+          {/if}
+          <div class="row split color-row mt-5">
+            <label style="font-size: 0.75rem;">Size
+              <input type="number" bind:value={frameTextTopSize} min="10" max="150" disabled={!enableFrame} style="width: 60px; height: 28px;"/>
+            </label>
+            <label style="font-size: 0.75rem;">Color
+              <input type="color" bind:value={frameTextTopColor} disabled={!enableFrame}/>
+            </label>
+          </div>
+        </div>
+
+        <div class="row split mt-5">
+          <input type="text" bind:value={frameText} placeholder="Bottom Text" disabled={!enableFrame} />
+        </div>
+
+        <div class="sub-panel mt-10 mb-10" style="background: rgba(0,0,0,0.03); border-radius: 8px; padding: 10px;">
+          <p class="sub-label" style="font-weight: bold; margin-bottom: 8px;">Bottom Text Settings</p>
+          <div class="row split">
+            <label class="checkbox-label" style="font-size: 0.85rem;">
+              <input type="checkbox" bind:checked={transparentTextBg} disabled={!enableFrame} /> Transparent BG
+            </label>
+            <label class="checkbox-label" style="font-size: 0.85rem;">
+              <input type="checkbox" bind:checked={matchTextStyle} disabled={!enableFrame} /> Match Style
+            </label>
+          </div>
+          <div class="row split mt-5">
+            <select bind:value={frameTextMode} disabled={!enableFrame} style="font-size: 0.8rem; height: 32px;">
+              <option value="flat">Flat Text</option>
+              <option value="curved">Conform to Shape</option>
+            </select>
+          </div>
+          {#if frameTextMode === 'curved'}
+          <div class="row mt-5">
+            <label style="font-size: 0.75rem; flex:1;">Distance
+              <input type="range" min="200" max="450" bind:value={frameTextRadius} disabled={!enableFrame} />
+            </label>
+            <label style="font-size: 0.75rem; flex:1;">Spacing
+              <input type="range" min="-10" max="50" bind:value={frameTextSpacing} disabled={!enableFrame} />
+            </label>
+          </div>
+          {/if}
+          <div class="row split color-row mt-5">
+            <label style="font-size: 0.75rem;">Size
+              <input type="number" bind:value={frameTextSize} min="10" max="150" disabled={!enableFrame} style="width: 60px; height: 28px;"/>
+            </label>
+            <label style="font-size: 0.75rem;">Color
+              <input type="color" bind:value={frameTextColor} disabled={!enableFrame}/>
+            </label>
+          </div>
+        </div>
         <div class="row split mt-10">
           <select bind:value={ringStyle} disabled={!enableFrame} class="full-width">
             <option value="none">No Ring (Overlay Only)</option>
@@ -1794,8 +2539,16 @@
           </select>
         </div>
         <div class="row split color-row mt-10">
-          <label>Ring <input type="color" bind:value={ringColor} disabled={!enableFrame}/> <input type="text" bind:value={ringColor} class="hex-input" on:blur={(event) => onHexBlur('ringColor', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor')} disabled={!enableFrame}>Pick</button></label>
-          <label>Text <input type="color" bind:value={frameTextColor} disabled={!enableFrame}/> <input type="text" bind:value={frameTextColor} class="hex-input" on:blur={(event) => onHexBlur('frameTextColor', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('frameTextColor')} disabled={!enableFrame}>Pick</button></label>
+          <label>Ring
+            <input type="color" bind:value={ringColor} disabled={!enableFrame}/>
+            <input type="text" bind:value={ringColor} class="hex-input" on:blur={(event) => onHexBlur('ringColor', event)} disabled={!enableFrame}/>
+            <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor')} disabled={!enableFrame}>Pick</button>
+          </label>
+          <label>Text
+            <input type="color" bind:value={frameTextColor} disabled={!enableFrame}/>
+            <input type="text" bind:value={frameTextColor} class="hex-input" on:blur={(event) => onHexBlur('frameTextColor', event)} disabled={!enableFrame}/>
+            <button class="mini-color-btn" type="button" on:click={() => pickColorInto('frameTextColor')} disabled={!enableFrame}>Pick</button>
+          </label>
         </div>
         <div class="sub-panel mt-10">
           <p class="sub-label">Overlay Gradient</p>
@@ -1809,16 +2562,32 @@
           </select>
           {#if ringStyle !== "none" && ringStyle !== "solid" && ringColorMode === "gradient" && ringGradientMode === "custom"}
             <div class="row split color-row mt-10">
-              <label>Main <input type="color" bind:value={ringColor} disabled={!enableFrame}/> <input type="text" bind:value={ringColor} class="hex-input" on:blur={(event) => onHexBlur('ringColor', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor')} disabled={!enableFrame}>Pick</button></label>
-              <label>Mid <input type="color" bind:value={ringColor2} disabled={!enableFrame}/> <input type="text" bind:value={ringColor2} class="hex-input" on:blur={(event) => onHexBlur('ringColor2', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor2')} disabled={!enableFrame}>Pick</button></label>
-              <label>End <input type="color" bind:value={ringColor3} disabled={!enableFrame}/> <input type="text" bind:value={ringColor3} class="hex-input" on:blur={(event) => onHexBlur('ringColor3', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor3')} disabled={!enableFrame}>Pick</button></label>
+              <label>Main
+                <input type="color" bind:value={ringColor} disabled={!enableFrame}/>
+                <input type="text" bind:value={ringColor} class="hex-input" on:blur={(event) => onHexBlur('ringColor', event)} disabled={!enableFrame}/>
+                <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor')} disabled={!enableFrame}>Pick</button>
+              </label>
+              <label>Mid
+                <input type="color" bind:value={ringColor2} disabled={!enableFrame}/>
+                <input type="text" bind:value={ringColor2} class="hex-input" on:blur={(event) => onHexBlur('ringColor2', event)} disabled={!enableFrame}/>
+                <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor2')} disabled={!enableFrame}>Pick</button>
+              </label>
+              <label>End
+                <input type="color" bind:value={ringColor3} disabled={!enableFrame}/>
+                <input type="text" bind:value={ringColor3} class="hex-input" on:blur={(event) => onHexBlur('ringColor3', event)} disabled={!enableFrame}/>
+                <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor3')} disabled={!enableFrame}>Pick</button>
+              </label>
             </div>
             <label class="checkbox-label" style="font-size: 0.85rem; margin: 10px 0 8px;">
               <input type="checkbox" bind:checked={ringUseFourthStop} disabled={!enableFrame} /> 4th Overlay Stop
             </label>
             {#if ringUseFourthStop}
               <div class="row color-row">
-                <label>Accent <input type="color" bind:value={ringColor4} disabled={!enableFrame}/> <input type="text" bind:value={ringColor4} class="hex-input" on:blur={(event) => onHexBlur('ringColor4', event)} disabled={!enableFrame}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor4')} disabled={!enableFrame}>Pick</button></label>
+                <label>Accent
+                  <input type="color" bind:value={ringColor4} disabled={!enableFrame}/>
+                  <input type="text" bind:value={ringColor4} class="hex-input" on:blur={(event) => onHexBlur('ringColor4', event)} disabled={!enableFrame}/>
+                  <button class="mini-color-btn" type="button" on:click={() => pickColorInto('ringColor4')} disabled={!enableFrame}>Pick</button>
+                </label>
               </div>
             {/if}
           {/if}
@@ -1908,6 +2677,7 @@
           <select bind:value={saveFormat} style="width: 30%; margin-bottom: 0;">
             <option value="png">PNG</option>
             <option value="jpg">JPG</option>
+            <option value="svg">SVG</option>
           </select>
           <button class="save-btn" on:click={saveImage} disabled={!qrImagePng} style="width: 65%;">
             {isNativeMobileDevice() ? "💾 SAVE TO GALLERY" : "💾 SAVE IMAGE"}
@@ -2065,6 +2835,7 @@
   .lovely-header { background: #18181F; padding: 15px; border-bottom: 1px solid #2A2A33; position: sticky; top: 0; z-index: 100; }
   .logo-area { display: flex; align-items: center; justify-content: center; gap: 15px; }
   .logo-icon { width: 60px; height: 60px; }
+  .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .logo-text { display: flex; flex-direction: column; text-align: left; }
   .logo-text h1 { font-size: 1.6rem; margin: 0; color: #fff; letter-spacing: -0.5px; font-weight: 800; }
   .ultra { background: linear-gradient(135deg, #21d4fd 0%, #b721ff 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; }

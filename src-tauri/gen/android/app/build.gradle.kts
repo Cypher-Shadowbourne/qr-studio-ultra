@@ -27,6 +27,19 @@ fun signingValue(envName: String, propertyName: String): String? =
     System.getenv(envName)?.takeIf { it.isNotBlank() }
         ?: signingProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
 
+fun signingFile(): File? {
+    val envPath = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val propertyPath = signingProperties.getProperty("storeFile")?.takeIf { it.isNotBlank() }
+    val candidates = listOfNotNull(
+        envPath?.let(::File),
+        propertyPath?.let(::File),
+        rootProject.file("../../../cafe-key.jks"),
+        rootProject.file("../../../app-release.keystore")
+    )
+
+    return candidates.firstOrNull { it.exists() }
+}
+
 android {
     compileSdk = 36
     namespace = "com.cypher.qrstudioultra"
@@ -40,26 +53,10 @@ android {
     }
     signingConfigs {
         create("release") {
-            val keystoreFile = rootProject.file("../../../my-release-key.jks")
-            if (keystoreFile.exists()) {
-                val resolvedStorePassword = signingValue("ANDROID_KEYSTORE_PASS", "storePassword")
-                val resolvedKeyAlias = signingValue("ANDROID_KEY_ALIAS", "keyAlias") ?: "qrstudio"
-                val resolvedKeyPassword = signingValue("ANDROID_KEY_PASS", "keyPassword")
-
-                check(!resolvedStorePassword.isNullOrBlank()) {
-                    "Release signing is configured with ${keystoreFile.name}, but no store password was found. " +
-                        "Set ANDROID_KEYSTORE_PASS or add storePassword to key.properties/local.properties."
-                }
-                check(!resolvedKeyPassword.isNullOrBlank()) {
-                    "Release signing is configured with ${keystoreFile.name}, but no key password was found. " +
-                        "Set ANDROID_KEY_PASS or add keyPassword to key.properties/local.properties."
-                }
-
-                storeFile = keystoreFile
-                storePassword = resolvedStorePassword
-                keyAlias = resolvedKeyAlias
-                keyPassword = resolvedKeyPassword
-            }
+            signingFile()?.let { storeFile = it }
+            storePassword = signingValue("ANDROID_KEYSTORE_PASSWORD", "storePassword")
+            keyAlias = signingValue("ANDROID_KEY_ALIAS", "keyAlias")
+            keyPassword = signingValue("ANDROID_KEY_PASSWORD", "keyPassword")
         }
     }
     buildTypes {
@@ -108,4 +105,5 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }
 
+apply(from = "tauri.build.gradle.kts")
 apply(from = "tauri.build.gradle.kts")

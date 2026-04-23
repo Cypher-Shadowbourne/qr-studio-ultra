@@ -1,0 +1,19 @@
+========================================
+BRAND ASSET DIRECTORY MANIFEST
+========================================
+Source: icon.png
+----------------------------------------
+
+[PNG - 48x48] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\android\mipmap-mdpi\ic_launcher.png
+[PNG - 72x72] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\android\mipmap-hdpi\ic_launcher.png
+[PNG - 96x96] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\android\mipmap-xhdpi\ic_launcher.png
+[PNG - 144x144] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\android\mipmap-xxhdpi\ic_launcher.png
+[PNG - 192x192] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\android\mipmap-xxxhdpi\ic_launcher.png
+[PNG - 32x32] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\tauri\32x32.png
+[PNG - 128x128] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\tauri\128x128.png
+[PNG - 256x256] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\tauri\256x256.png
+[PNG - 512x512] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\play-store\play_store_icon.png
+
+[ICO - Multi-size] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\tauri\icon.ico
+
+[MASTER COPY] : C:\Users\pbess\Desktop\Asset Creator\App_Brand_Kit\master\icon_master.png
