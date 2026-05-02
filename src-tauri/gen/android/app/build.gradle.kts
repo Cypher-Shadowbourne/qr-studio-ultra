@@ -84,7 +84,7 @@ android {
             }
 
             storePassword = signingValue("ANDROID_KEYSTORE_PASSWORD", "storePassword", "12345qwe")
-            keyAlias = signingValue("ANDROID_KEY_ALIAS", "keyAlias", "qr-studio-ultra")
+            keyAlias = signingValue("ANDROID_KEY_ALIAS", "keyAlias", "my-key-alias")
             keyPassword = signingValue("ANDROID_KEY_PASSWORD", "keyPassword", "12345qwe")
         }
     }

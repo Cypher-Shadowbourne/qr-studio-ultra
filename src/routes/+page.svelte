@@ -6,7 +6,7 @@
   import { settingsStore } from "$lib/settingsStore.svelte";
   import { generateAiMagicDesign, getProviderLabel } from "$lib/aiService";
   import Settings from "./Settings.svelte";
-  import { Format, scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
+  import { Format, scan, cancel, checkPermissions, requestPermissions, openAppSettings } from "@tauri-apps/plugin-barcode-scanner";
   import { save } from "@tauri-apps/plugin-dialog";
 
   type SavedWallet = {
@@ -482,7 +482,10 @@
   $: currentScannability = getScannabilityScore(buildFinalQrData(), scannabilityInput);
   
   // Scanner & Modal State
-  let isScanning = false; 
+  let scannerOpen = false;
+  let scannerBusy = false;
+  let scannerStatus = "";
+  let scannerError = "";
   let scannedResult = ""; 
   let scannedFormat = "";
   let scannedKind = "";
@@ -547,6 +550,19 @@
     { name: "Steel Fade", c1: "#1f2731", c2: "#485563", c3: "#7d8fa1" }
   ];
   const walletStorageKey = "qr-studio-ultra.wallets";
+
+  function setScannerMode(active: boolean) {
+    if (typeof document === "undefined") return;
+
+    document.documentElement.classList.toggle("scanner-active", active);
+    document.body.classList.toggle("scanner-active", active);
+
+    const transparent = active ? "transparent" : "";
+    document.documentElement.style.background = transparent;
+    document.documentElement.style.backgroundColor = transparent;
+    document.body.style.background = transparent;
+    document.body.style.backgroundColor = transparent;
+  }
 
   // Explicitly include Code 128, EAN, UPC, and ISBN formats for barcode scanning
   const scannerFormats = [
@@ -2245,39 +2261,121 @@
     scannedResult = ""; 
     scannedFormat = "";
     scannedKind = "";
+    scannerError = "";
+    scannerStatus = "";
     closeScanDecryptModal();
-    try {
+
+    const mobile = isNativeMobileDevice();
+    let scannerStatusTimer: ReturnType<typeof setTimeout> | undefined;
+    if (mobile) {
+      scannerOpen = true;
+      scannerBusy = true;
+      scannerStatus = "Opening camera...";
+      setScannerMode(true);
+      await tick();
+
       try {
-        await requestPermissions();
+        const permissions = await checkPermissions();
+        if (permissions === "prompt") {
+          const requestResult = await requestPermissions();
+          if (requestResult === "denied") {
+            scannerError = "Camera permission denied. Open app settings to grant access.";
+            scannerBusy = false;
+            scannerStatus = "";
+            return;
+          }
+        } else if (permissions === "denied") {
+          scannerError = "Camera permission denied. Open app settings to grant access.";
+          scannerBusy = false;
+          scannerStatus = "";
+          return;
+        }
       } catch (permErr) {
-        showSaveToastMessage("Camera access denied. Please grant camera permission on your mobile device to use the scanner.", "error");
+        scannerError = "Camera permission failed. Open app settings to continue.";
+        scannerBusy = false;
+        scannerStatus = "";
         return;
       }
+    }
 
-      isScanning = true;
-      const result = await scan({ windowed: true, cameraDirection: "back", formats: scannerFormats });
-      
-      if (result && result.content) {
-         const payload = result.content.trim();
-         scannedFormat = toDisplayCase(result.format);
-         scannedResult = payload;
-         scannedKind = classifyScan(payload, result.format);
-         if (isEncryptedQrPayload(payload)) {
-           handleEncryptedQrScan(payload);
-         }
+    try {
+      if (mobile) {
+        scannerOpen = true;
+        scannerStatus = "Opening camera...";
+        setScannerMode(true);
+        await tick();
+        scannerStatusTimer = setTimeout(() => {
+          if (scannerOpen && scannerBusy && !scannerError) {
+            scannerStatus = "Scanning...";
+          }
+        }, 650);
+
+        const result = await scan({
+          windowed: true,
+          formats: [Format.QRCode],
+          cameraDirection: "back"
+        });
+        if (result && result.content) {
+          const payload = result.content.trim();
+          scannedFormat = toDisplayCase(result.format);
+          scannedResult = payload;
+          scannedKind = classifyScan(payload, result.format);
+          if (isEncryptedQrPayload(payload)) {
+            handleEncryptedQrScan(payload);
+          }
+        }
+      } else {
+        const result = await scan({ formats: scannerFormats });
+        if (result && result.content) {
+          const payload = result.content.trim();
+          scannedFormat = toDisplayCase(result.format);
+          scannedResult = payload;
+          scannedKind = classifyScan(payload, result.format);
+          if (isEncryptedQrPayload(payload)) {
+            handleEncryptedQrScan(payload);
+          }
+        }
       }
     } catch (e) {
       if (e !== "Canceled" && e !== "cancel") {
-         showSaveToastMessage("Scanner could not start: " + e, "error");
+        if (mobile) {
+          scannerError = "Scanner could not start: " + e;
+          showSaveToastMessage(scannerError, "error");
+        } else {
+          showSaveToastMessage("Scanner could not start: " + e, "error");
+        }
       }
     } finally {
-      isScanning = false;
+      if (scannerStatusTimer) {
+        clearTimeout(scannerStatusTimer);
+      }
+      scannerBusy = false;
+      scannerOpen = false;
+      scannerStatus = "";
+      setScannerMode(false);
     }
   }
 
   async function cancelScanner() {
-    try { await cancel(); } catch (e) { console.error(e); }
-    isScanning = false;
+    try {
+      await cancel();
+    } catch (e) {
+      console.error(e);
+    }
+    scannerOpen = false;
+    scannerBusy = false;
+    scannerStatus = "";
+    scannerError = "";
+    setScannerMode(false);
+  }
+
+  async function openScannerSettings() {
+    try {
+      await openAppSettings();
+    } catch (e) {
+      console.error("Failed to open app settings", e);
+      showSaveToastMessage("Could not open settings: " + e, "error");
+    }
   }
 
   async function openLink(url: string) {
@@ -3243,18 +3341,14 @@
   }
 
   $: if (typeof document !== 'undefined') {
-    if (isScanning) {
-      document.body.classList.add('scanning-active');
-    } else {
-      document.body.classList.remove('scanning-active');
-    }
+    setScannerMode(scannerOpen);
   }
 
   $: scannedResultCanOpen = canOpenResult(scannedResult);
 </script>
 
 {#if currentView === 'studio'}
-  <main class="mobile-app">
+  <main class="mobile-app {scannerOpen ? 'scanner-mode' : ''}">
     <input
       bind:this={fallbackColorInput}
       type="color"
@@ -3264,23 +3358,39 @@
       aria-hidden="true"
       tabindex="-1"
     />
-    {#if isScanning}
+    {#if scannerOpen}
     <div class="scanner-overlay">
-      <div class="scanner-header">
-        <h2>SCANNING...</h2>
-        <p>Point camera at a QR code or barcode</p>
+      <div class="scanner-top-panel">
+        <div>
+          <h2>Scan QR Code</h2>
+          <p>Point your camera at a QR code</p>
+        </div>
+        {#if scannerError}
+          <div class="scanner-error">{scannerError}</div>
+        {/if}
       </div>
-      <div class="scanner-stage">
-        <div class="scanner-target">
+
+      <div class="scanner-window">
+        <div class="scanner-frame">
           <div class="scanner-corner top-left"></div>
           <div class="scanner-corner top-right"></div>
           <div class="scanner-corner bottom-left"></div>
           <div class="scanner-corner bottom-right"></div>
-          <div class="scanner-line"></div>
+          {#if scannerStatus}
+            <div class="scanner-status">{scannerStatus}</div>
+          {/if}
         </div>
-        <p class="scanner-caption">Reads QR, Code 128, EAN, UPC, ISBN, Code 39, PDF417 and more</p>
       </div>
-      <button class="cancel-scan-btn" on:click={cancelScanner}>CANCEL SCAN</button>
+
+      <div class="scanner-bottom-panel">
+        <p class="scanner-caption">Keep the QR code inside the frame until it scans.</p>
+        <div class="scanner-actions">
+          {#if scannerError}
+            <button class="scanner-btn secondary-btn" on:click={openScannerSettings}>Open Settings</button>
+          {/if}
+          <button class="scanner-btn cancel-scan-btn" on:click={cancelScanner}>Cancel</button>
+        </div>
+      </div>
     </div>
   {:else}
     
@@ -4475,7 +4585,28 @@
     -webkit-tap-highlight-color: transparent; 
   }
 
-  :global(body.scanning-active) { background-color: transparent !important; }
+  :global(html.scanner-active),
+  :global(body.scanner-active),
+  :global(body.scanner-active > div),
+  :global(body.scanner-active #svelte),
+  :global(body.scanner-active [data-sveltekit-preload-data]) {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  :global(html.scanner-active) *,
+  :global(body.scanner-active) *,
+  :global(body.scanner-active) *::before,
+  :global(body.scanner-active) *::after {
+    -webkit-backdrop-filter: none !important;
+  }
+
+  :global(body.scanner-active) .mobile-app,
+  .mobile-app.scanner-mode {
+    background: transparent !important;
+    background-color: transparent !important;
+    color-scheme: light;
+  }
 
   .mobile-app { display: flex; flex-direction: column; max-width: 600px; margin: 0 auto; min-height: 100vh; position: relative; }
 
@@ -4651,18 +4782,33 @@
 
   .scrolling-content { padding: 15px; padding-bottom: 40px; display: flex; flex-direction: column; gap: 15px; }
 
-  .scanner-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 56px 20px 42px; background: radial-gradient(circle at center, rgba(0,0,0,0.16) 0, rgba(0,0,0,0.16) 18%, rgba(0,0,0,0.62) 65%, rgba(0,0,0,0.78) 100%); z-index: 9999; }
-  .scanner-header h2 { color: #00FF00; font-size: 2rem; margin: 0 0 10px 0; text-shadow: 0 4px 6px rgba(0,0,0,0.9); text-align: center; }
-  .scanner-header p { color: white; font-size: 1.1rem; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.9); text-align: center; }
-  .scanner-stage { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; }
-  .scanner-target { position: relative; width: min(78vw, 320px); aspect-ratio: 1 / 1; border: 2px solid rgba(255,255,255,0.22); border-radius: 24px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.24); backdrop-filter: blur(1px); overflow: hidden; }
-  .scanner-corner { position: absolute; width: 42px; height: 42px; border-color: #00ff88; border-style: solid; filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.75)); }
-  .scanner-corner.top-left { top: -2px; left: -2px; border-width: 5px 0 0 5px; border-top-left-radius: 20px; }
-  .scanner-corner.top-right { top: -2px; right: -2px; border-width: 5px 5px 0 0; border-top-right-radius: 20px; }
-  .scanner-corner.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 5px 5px; border-bottom-left-radius: 20px; }
-  .scanner-corner.bottom-right { bottom: -2px; right: -2px; border-width: 0 5px 5px 0; border-bottom-right-radius: 20px; }
-  .scanner-line { position: absolute; left: 7%; right: 7%; height: 3px; border-radius: 999px; background: linear-gradient(90deg, rgba(255,0,0,0), #ff3b30 20%, #ff6a6a 50%, #ff3b30 80%, rgba(255,0,0,0)); box-shadow: 0 0 18px rgba(255, 59, 48, 0.95); animation: scan-sweep 2.2s ease-in-out infinite; }
-  .scanner-caption { color: #f5f7fa; font-size: 0.95rem; text-align: center; max-width: 290px; line-height: 1.4; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  .scanner-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 20px 18px 24px; background: transparent !important; background-color: transparent !important; z-index: 99999; pointer-events: auto; isolation: isolate; }
+  .scanner-top-panel,
+  .scanner-bottom-panel { width: 100%; background: rgba(0, 0, 0, 0.72); border-radius: 22px; padding: 18px 18px; color: #fff; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35); }
+  .scanner-top-panel { display: flex; flex-direction: column; gap: 8px; }
+  .scanner-top-panel h2 { color: #f7f7f7; font-size: 1.9rem; margin: 0; letter-spacing: 0.02em; }
+  .scanner-top-panel p { margin: 0; color: #d7d7d7; font-size: 1rem; line-height: 1.4; }
+  .scanner-error { margin-top: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 72, 72, 0.16); color: #ffbdc1; border: 1px solid rgba(255, 72, 72, 0.35); font-size: 0.96rem; }
+  .scanner-window,
+  .scanner-camera-window,
+  .scanner-frame,
+  .scanner-viewfinder { background: transparent !important; background-color: transparent !important; opacity: 1 !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .scanner-window { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; padding: 18px 0; background: transparent !important; background-color: transparent !important; }
+  .scanner-frame { position: relative; width: min(84vw, 340px); aspect-ratio: 1 / 1; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 28px; overflow: visible; background: transparent !important; background-color: transparent !important; opacity: 1 !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .scanner-frame::before,
+  .scanner-frame::after { content: none !important; display: none !important; }
+  .scanner-corner { position: absolute; width: 42px; height: 42px; border-color: #4dffb3; border-style: solid; filter: drop-shadow(0 0 14px rgba(77, 255, 179, 0.55)); }
+  .scanner-corner.top-left { top: 0; left: 0; border-width: 5px 0 0 5px; border-top-left-radius: 18px; }
+  .scanner-corner.top-right { top: 0; right: 0; border-width: 5px 5px 0 0; border-top-right-radius: 18px; }
+  .scanner-corner.bottom-left { bottom: 0; left: 0; border-width: 0 0 5px 5px; border-bottom-left-radius: 18px; }
+  .scanner-corner.bottom-right { bottom: 0; right: 0; border-width: 0 5px 5px 0; border-bottom-right-radius: 18px; }
+  .scanner-status { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 18px; color: #efe; font-size: 0.98rem; text-shadow: 0 0 10px rgba(0, 0, 0, 0.65); }
+  .scanner-caption { margin: 0; color: #d7d7d7; text-align: center; font-size: 0.96rem; line-height: 1.4; }
+  .scanner-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .scanner-btn { width: 100%; padding: 16px 22px; border-radius: 14px; font-weight: 800; font-size: 1rem; border: none; cursor: pointer; }
+  .scanner-btn.secondary-btn { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.18); }
+  .cancel-scan-btn { background-color: #ff4f54; color: white; padding: 16px 22px; border: none; border-radius: 14px; font-size: 1rem; font-weight: 900; box-shadow: 0 10px 22px rgba(255, 79, 84, 0.28); cursor: pointer; }
+  .activate-scan-btn { width: 100%; background: linear-gradient(135deg, #21d4fd 0%, #b721ff 100%); color: white; font-size: 1.1rem; font-weight: 900; padding: 18px; border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(183, 33, 255, 0.3); cursor: pointer; margin-bottom: 5px; }
 
   .result-panel { border-color: #00FF7F; background: #0d1a12; box-shadow: 0 0 15px rgba(0, 255, 127, 0.1); }
   .result-legend { color: #00FF7F; font-weight: 900; text-shadow: 0 0 5px rgba(0, 255, 127, 0.5); }
