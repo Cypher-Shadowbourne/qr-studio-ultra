@@ -24,12 +24,22 @@ import java.io.IOException
 @Keep
 object MediaStoreSaver {
     private var lastSavedUri: android.net.Uri? = null
+    private var lastSavedMimeType: String? = null
 
     @Keep
     fun saveQrImage(activity: Activity, bytes: ByteArray, filename: String, mimeType: String): String {
         val resolver = activity.contentResolver
-        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val relativePath = "${Environment.DIRECTORY_PICTURES}/QR Studio Ultra"
+        val isSvg = mimeType.equals("image/svg+xml", ignoreCase = true)
+        val collection = if (isSvg && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        } else {
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        }
+        val relativePath = if (isSvg) {
+            "${Environment.DIRECTORY_DOWNLOADS}/QR Studio Ultra"
+        } else {
+            "${Environment.DIRECTORY_PICTURES}/QR Studio Ultra"
+        }
 
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -57,7 +67,12 @@ object MediaStoreSaver {
             }
 
             lastSavedUri = uri
-            return "Saved to Gallery/Photos in Pictures/QR Studio Ultra."
+            lastSavedMimeType = mimeType
+            return if (isSvg) {
+                "Saved SVG to Downloads/QR Studio Ultra."
+            } else {
+                "Saved to Gallery/Photos in Pictures/QR Studio Ultra."
+            }
         } catch (e: Exception) {
             resolver.delete(uri, null, null)
             throw e
@@ -66,25 +81,27 @@ object MediaStoreSaver {
 
     @Keep
     fun openLastSavedImage(activity: Activity): String {
-        val uri = lastSavedUri ?: throw IOException("No saved image is available yet.")
+        val uri = lastSavedUri ?: throw IOException("No saved file is available yet.")
+        val savedMimeType = lastSavedMimeType ?: "image/*"
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "image/*")
+            setDataAndType(uri, savedMimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        activity.startActivity(Intent.createChooser(intent, "Open QR image"))
-        return "Opened saved image."
+        activity.startActivity(Intent.createChooser(intent, "Open QR export"))
+        return "Opened saved export."
     }
 
     @Keep
     fun shareLastSavedImage(activity: Activity): String {
-        val uri = lastSavedUri ?: throw IOException("No saved image is available yet.")
+        val uri = lastSavedUri ?: throw IOException("No saved file is available yet.")
+        val savedMimeType = lastSavedMimeType ?: "image/*"
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/*"
+            type = savedMimeType
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        activity.startActivity(Intent.createChooser(intent, "Share QR image"))
+        activity.startActivity(Intent.createChooser(intent, "Share QR export"))
         return "Opened share sheet."
     }
 

@@ -2159,6 +2159,18 @@
     window.print();
   }
 
+  function encodeTextToBase64(value: string): string {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    const chunkSize = 0x8000;
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+
+    return btoa(binary);
+  }
   // --- SAVE TO NATIVE GALLERY ---
   async function saveImage() {
     if (!qrImagePng) return;
@@ -2172,17 +2184,21 @@
       const isMobile = isNativeMobileDevice();
 
       if (isMobile) {
-        // Android builds save raster images straight to gallery/photos.
-        // Folder picker support is not consistently available on mobile.
         if (isSvg) {
-          showSaveToastMessage("SVG export on mobile is not available yet. Use PNG or JPG, or export SVG on desktop.", "info");
-          return;
+          const svg = await invoke<string>("generate_ultra_qr_svg", {
+            options: buildQrRenderOptions(finalData)
+          });
+          const svgB64 = encodeTextToBase64(svg);
+          const result = await invoke<{ message: string }>("save_to_device", { b64: svgB64, format: "svg" });
+          showSaveToastMessage(result.message, "success");
+          showMobileSaveActions = true;
+          rememberRecentSave("Saved SVG to device");
+        } else {
+          const result = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: saveFormat });
+          showSaveToastMessage(result.message, "success");
+          showMobileSaveActions = true;
+          rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to Gallery`);
         }
-
-        const result = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: saveFormat });
-        showSaveToastMessage(result.message, "success");
-        showMobileSaveActions = true;
-        rememberRecentSave(`Saved ${saveFormat.toUpperCase()} to Gallery`);
       } else {
         // Prompt user to choose where to save on desktop
         const filePath = await save({

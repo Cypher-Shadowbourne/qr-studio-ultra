@@ -742,17 +742,13 @@ async fn save_to_device(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let ext = if format.to_lowercase() == "jpg" {
-        "jpg"
-    } else {
-        "png"
+    let format_normalized = format.to_lowercase();
+    let (ext, mime_type) = match format_normalized.as_str() {
+        "jpg" | "jpeg" => ("jpg", "image/jpeg"),
+        "svg" => ("svg", "image/svg+xml"),
+        _ => ("png", "image/png"),
     };
     let filename = format!("QR_Studio_{}.{}", timestamp, ext);
-    let mime_type = if ext == "jpg" {
-        "image/jpeg"
-    } else {
-        "image/png"
-    };
 
     #[cfg(target_os = "android")]
     {
