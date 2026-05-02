@@ -1,15 +1,20 @@
+use aes_gcm::{Aes256Gcm, Nonce as AesNonce};
+use argon2::{Algorithm, Argon2, Params, Version};
+use base64::{engine::general_purpose, Engine as _};
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{ChaCha20Poly1305, Nonce as ChaChaNonce};
 use fast_qr::qr::QRBuilder;
-use image::{Rgba, RgbaImage, ImageFormat};
+use image::{ImageFormat, Rgba, RgbaImage};
 use qr_code_styling::types::DotType;
 use qr_code_styling::{
     Color, CornerDotType, CornerSquareType, CornersDotOptions, CornersSquareOptions, DotsOptions,
     ErrorCorrectionLevel, Gradient, ImageOptions, QRCodeStyling, QROptions, ShapeType,
 };
+use rand_core::{OsRng, RngCore};
 use std::fmt::Write as _;
 use std::io::Cursor;
-use base64::{engine::general_purpose, Engine as _};
-use tauri_plugin_shell::ShellExt;
 use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
 
 #[cfg(target_os = "android")]
 use jni::objects::{JClass, JObject, JString, JValue};
@@ -17,6 +22,264 @@ use jni::objects::{JClass, JObject, JString, JValue};
 use std::sync::mpsc;
 #[cfg(target_os = "android")]
 use std::time::Duration;
+
+const ENCRYPTED_QR_PREFIX: &str = "QRU1:";
+const ENCRYPTED_QR_VERSION: &str = "QRU1";
+const ENCRYPTED_QR_KDF: &str = "argon2id";
+const ENCRYPTED_QR_ALGORITHM_CHACHA20: &str = "chacha20-poly1305";
+const ENCRYPTED_QR_ALGORITHM_AES256: &str = "aes-256-gcm";
+const QR_KEY_LEN: usize = 32;
+const QR_SALT_LEN: usize = 16;
+const QR_NONCE_LEN: usize = 12;
+const QR_ARGON2_MEMORY_KIB: u32 = 19_456;
+const QR_ARGON2_ITERATIONS: u32 = 2;
+const QR_ARGON2_PARALLELISM: u32 = 1;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct EncryptedQrPayload {
+    version: String,
+    kdf: String,
+    algorithm: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_date: Option<String>,
+    salt: String,
+    nonce: String,
+    ciphertext: String,
+}
+
+fn qr_argon2() -> Result<Argon2<'static>, String> {
+    let params = Params::new(
+        QR_ARGON2_MEMORY_KIB,
+        QR_ARGON2_ITERATIONS,
+        QR_ARGON2_PARALLELISM,
+        Some(QR_KEY_LEN),
+    )
+    .map_err(|_| "Could not configure QR encryption.".to_string())?;
+
+    Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
+}
+
+fn derive_qr_key(passphrase: &str, salt: &[u8]) -> Result<[u8; QR_KEY_LEN], String> {
+    let mut key = [0u8; QR_KEY_LEN];
+    qr_argon2()?
+        .hash_password_into(passphrase.as_bytes(), salt, &mut key)
+        .map_err(|_| "Could not derive encryption key.".to_string())?;
+    Ok(key)
+}
+
+fn decode_payload_field(value: &str, label: &str) -> Result<Vec<u8>, String> {
+    general_purpose::URL_SAFE_NO_PAD
+        .decode(value)
+        .map_err(|_| format!("Invalid encrypted QR payload: {label} is not valid base64url."))
+}
+
+fn normalize_qr_algorithm(algorithm: Option<String>) -> Result<&'static str, String> {
+    match algorithm
+        .as_deref()
+        .unwrap_or(ENCRYPTED_QR_ALGORITHM_CHACHA20)
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "" | ENCRYPTED_QR_ALGORITHM_CHACHA20 | "chacha20poly1305" => {
+            Ok(ENCRYPTED_QR_ALGORITHM_CHACHA20)
+        }
+        ENCRYPTED_QR_ALGORITHM_AES256 | "aes256-gcm" | "aes-gcm" => {
+            Ok(ENCRYPTED_QR_ALGORITHM_AES256)
+        }
+        _ => Err("Unsupported encryption algorithm.".to_string()),
+    }
+}
+
+fn normalize_forensic_date(date: Option<String>) -> Result<Option<String>, String> {
+    let Some(raw_date) = date else {
+        return Ok(None);
+    };
+    let trimmed = raw_date.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let parts: Vec<&str> = trimmed.split('/').collect();
+    if parts.len() != 3
+        || parts[0].len() != 2
+        || parts[1].len() != 2
+        || parts[2].len() != 4
+        || !parts
+            .iter()
+            .all(|part| part.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return Err("Forensic date must use day/month/year format.".to_string());
+    }
+
+    let day = parts[0]
+        .parse::<u32>()
+        .map_err(|_| "Forensic date day is invalid.".to_string())?;
+    let month = parts[1]
+        .parse::<u32>()
+        .map_err(|_| "Forensic date month is invalid.".to_string())?;
+    let year = parts[2]
+        .parse::<u32>()
+        .map_err(|_| "Forensic date year is invalid.".to_string())?;
+
+    if !(1..=12).contains(&month) || year == 0 {
+        return Err("Forensic date must use a valid day/month/year value.".to_string());
+    }
+
+    let leap_year = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let days_in_month = match month {
+        2 if leap_year => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+
+    if day == 0 || day > days_in_month {
+        return Err("Forensic date must use a valid day/month/year value.".to_string());
+    }
+
+    Ok(Some(trimmed.to_string()))
+}
+
+#[tauri::command]
+fn encrypt_qr_payload(
+    plaintext: String,
+    passphrase: String,
+    encryption_algorithm: Option<String>,
+    forensic_date: Option<String>,
+) -> Result<String, String> {
+    if plaintext.is_empty() {
+        return Err("Enter text to encrypt.".to_string());
+    }
+    if passphrase.is_empty() {
+        return Err("Enter a passphrase.".to_string());
+    }
+    let algorithm = normalize_qr_algorithm(encryption_algorithm)?;
+    let created_date = normalize_forensic_date(forensic_date)?;
+    let aad = created_date.as_deref().unwrap_or("").as_bytes();
+
+    let mut salt = [0u8; QR_SALT_LEN];
+    let mut nonce = [0u8; QR_NONCE_LEN];
+    OsRng.fill_bytes(&mut salt);
+    OsRng.fill_bytes(&mut nonce);
+
+    let key = derive_qr_key(&passphrase, &salt)?;
+    let ciphertext = match algorithm {
+        ENCRYPTED_QR_ALGORITHM_AES256 => {
+            let cipher = Aes256Gcm::new_from_slice(&key)
+                .map_err(|_| "Could not initialize QR encryption.".to_string())?;
+            cipher
+                .encrypt(
+                    AesNonce::from_slice(&nonce),
+                    Payload {
+                        msg: plaintext.as_bytes(),
+                        aad,
+                    },
+                )
+                .map_err(|_| "Could not encrypt QR payload.".to_string())?
+        }
+        ENCRYPTED_QR_ALGORITHM_CHACHA20 => {
+            let cipher = ChaCha20Poly1305::new_from_slice(&key)
+                .map_err(|_| "Could not initialize QR encryption.".to_string())?;
+            cipher
+                .encrypt(
+                    ChaChaNonce::from_slice(&nonce),
+                    Payload {
+                        msg: plaintext.as_bytes(),
+                        aad,
+                    },
+                )
+                .map_err(|_| "Could not encrypt QR payload.".to_string())?
+        }
+        _ => return Err("Unsupported encryption algorithm.".to_string()),
+    };
+
+    let payload = EncryptedQrPayload {
+        version: ENCRYPTED_QR_VERSION.to_string(),
+        kdf: ENCRYPTED_QR_KDF.to_string(),
+        algorithm: algorithm.to_string(),
+        created_date,
+        salt: general_purpose::URL_SAFE_NO_PAD.encode(salt),
+        nonce: general_purpose::URL_SAFE_NO_PAD.encode(nonce),
+        ciphertext: general_purpose::URL_SAFE_NO_PAD.encode(ciphertext),
+    };
+    let json = serde_json::to_vec(&payload)
+        .map_err(|_| "Could not serialize encrypted QR payload.".to_string())?;
+
+    Ok(format!(
+        "{}{}",
+        ENCRYPTED_QR_PREFIX,
+        general_purpose::URL_SAFE_NO_PAD.encode(json)
+    ))
+}
+
+#[tauri::command]
+fn decrypt_qr_payload(encrypted_payload: String, passphrase: String) -> Result<String, String> {
+    if passphrase.is_empty() {
+        return Err("Enter a passphrase.".to_string());
+    }
+
+    let encoded = encrypted_payload
+        .trim()
+        .strip_prefix(ENCRYPTED_QR_PREFIX)
+        .ok_or_else(|| "Invalid encrypted QR payload: expected QRU1 prefix.".to_string())?;
+    let json = general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_| "Invalid encrypted QR payload: body is not valid base64url.".to_string())?;
+    let payload: EncryptedQrPayload = serde_json::from_slice(&json)
+        .map_err(|_| "Invalid encrypted QR payload: body is not valid JSON.".to_string())?;
+
+    if payload.version != ENCRYPTED_QR_VERSION || payload.kdf != ENCRYPTED_QR_KDF {
+        return Err("Unsupported encrypted QR payload version or algorithm.".to_string());
+    }
+    let algorithm = normalize_qr_algorithm(Some(payload.algorithm.clone()))?;
+    let aad = payload.created_date.as_deref().unwrap_or("").as_bytes();
+
+    let salt = decode_payload_field(&payload.salt, "salt")?;
+    let nonce = decode_payload_field(&payload.nonce, "nonce")?;
+    let ciphertext = decode_payload_field(&payload.ciphertext, "ciphertext")?;
+    if salt.len() != QR_SALT_LEN || nonce.len() != QR_NONCE_LEN {
+        return Err("Invalid encrypted QR payload: salt or nonce length is incorrect.".to_string());
+    }
+
+    let key = derive_qr_key(&passphrase, &salt)?;
+    let plaintext = match algorithm {
+        ENCRYPTED_QR_ALGORITHM_AES256 => {
+            let cipher = Aes256Gcm::new_from_slice(&key)
+                .map_err(|_| "Could not initialize QR decryption.".to_string())?;
+            cipher
+                .decrypt(
+                    AesNonce::from_slice(&nonce),
+                    Payload {
+                        msg: ciphertext.as_ref(),
+                        aad,
+                    },
+                )
+                .map_err(|_| {
+                    "Decryption failed. Check the passphrase and encrypted QR payload.".to_string()
+                })?
+        }
+        ENCRYPTED_QR_ALGORITHM_CHACHA20 => {
+            let cipher = ChaCha20Poly1305::new_from_slice(&key)
+                .map_err(|_| "Could not initialize QR decryption.".to_string())?;
+            cipher
+                .decrypt(
+                    ChaChaNonce::from_slice(&nonce),
+                    Payload {
+                        msg: ciphertext.as_ref(),
+                        aad,
+                    },
+                )
+                .map_err(|_| {
+                    "Decryption failed. Check the passphrase and encrypted QR payload.".to_string()
+                })?
+        }
+        _ => return Err("Unsupported encrypted QR payload version or algorithm.".to_string()),
+    };
+
+    String::from_utf8(plaintext)
+        .map_err(|_| "Decryption succeeded, but the plaintext was not valid UTF-8.".to_string())
+}
 
 fn hex_to_rgba(hex: &str) -> Rgba<u8> {
     let hex = hex.trim_start_matches('#');
@@ -26,7 +289,9 @@ fn hex_to_rgba(hex: &str) -> Rgba<u8> {
         let b = u8::from_str_radix(&hex[2..3], 16).unwrap_or(0);
         return Rgba([r * 17, g * 17, b * 17, 255]);
     }
-    if hex.len() != 6 { return Rgba([0, 0, 0, 255]); }
+    if hex.len() != 6 {
+        return Rgba([0, 0, 0, 255]);
+    }
     let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
     let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
     let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
@@ -94,14 +359,7 @@ fn trim_transparent_logo(logo: &RgbaImage) -> RgbaImage {
         return logo.clone();
     }
 
-    image::imageops::crop_imm(
-        logo,
-        min_x,
-        min_y,
-        max_x - min_x + 1,
-        max_y - min_y + 1,
-    )
-    .to_image()
+    image::imageops::crop_imm(logo, min_x, min_y, max_x - min_x + 1, max_y - min_y + 1).to_image()
 }
 
 fn fit_contain_dimensions(source_width: u32, source_height: u32, max_size: u32) -> (u32, u32) {
@@ -131,7 +389,9 @@ fn blend_pixel(dst: &mut Rgba<u8>, src: Rgba<u8>) {
     dst[0] = (src[0] as f32 * alpha + dst[0] as f32 * inv_alpha).round() as u8;
     dst[1] = (src[1] as f32 * alpha + dst[1] as f32 * inv_alpha).round() as u8;
     dst[2] = (src[2] as f32 * alpha + dst[2] as f32 * inv_alpha).round() as u8;
-    dst[3] = ((src[3] as f32) + dst[3] as f32 * inv_alpha).round().clamp(0.0, 255.0) as u8;
+    dst[3] = ((src[3] as f32) + dst[3] as f32 * inv_alpha)
+        .round()
+        .clamp(0.0, 255.0) as u8;
 }
 
 fn gradient_color_at(
@@ -162,13 +422,41 @@ fn gradient_color_at(
     Rgba([r, g, b, 255])
 }
 
+use std::io::Write;
+
+#[tauri::command]
+fn save_batch_as_zip(items: Vec<serde_json::Value>, path: String) -> Result<String, String> {
+    let file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored);
+
+    for (i, item) in items.iter().enumerate() {
+        let label = item["label"].as_str().unwrap_or("item");
+        let b64 = item["image"].as_str().ok_or("Missing image data")?;
+        let clean_b64 = strip_data_url_prefix(b64);
+        let decoded = general_purpose::STANDARD
+            .decode(clean_b64)
+            .map_err(|e| e.to_string())?;
+
+        let filename = format!("{}_{}_{}.png", i + 1, label.replace(' ', "_"), i);
+        zip.start_file(filename, options).map_err(|e| e.to_string())?;
+        zip.write_all(&decoded).map_err(|e| e.to_string())?;
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(format!("Successfully saved {} items to {}", items.len(), path))
+}
+
 #[tauri::command]
 fn save_to_path(b64: String, path: String) -> Result<String, String> {
     let clean_b64 = strip_data_url_prefix(&b64);
-    let decoded = general_purpose::STANDARD.decode(clean_b64).map_err(|e| e.to_string())?;
+    let decoded = general_purpose::STANDARD
+        .decode(clean_b64)
+        .map_err(|e| e.to_string())?;
 
     std::fs::write(&path, decoded).map_err(|e| e.to_string())?;
-    
+
     Ok(format!("Saved successfully to: {}", path))
 }
 
@@ -178,6 +466,11 @@ fn save_svg_to_path(options: QrOptions, path: String) -> Result<String, String> 
     std::fs::write(&path, svg).map_err(|e| e.to_string())?;
 
     Ok(format!("Saved successfully to: {}", path))
+}
+
+#[tauri::command]
+fn generate_ultra_qr_svg(options: QrOptions) -> Result<String, String> {
+    build_svg_qr(&options)
 }
 
 #[derive(serde::Serialize)]
@@ -192,9 +485,9 @@ fn save_to_android_gallery(
     filename: &str,
     mime_type: &str,
 ) -> Result<String, String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "Could not access the main app window for Android gallery save.".to_string())?;
+    let window = app.get_webview_window("main").ok_or_else(|| {
+        "Could not access the main app window for Android gallery save.".to_string()
+    })?;
 
     let (tx, rx) = mpsc::channel();
     let bytes = decoded.to_vec();
@@ -274,10 +567,13 @@ fn save_to_android_gallery(
 }
 
 #[cfg(target_os = "android")]
-fn run_android_media_action(app: &tauri::AppHandle, method_name: &'static str) -> Result<String, String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "Could not access the main app window for Android media action.".to_string())?;
+fn run_android_media_action(
+    app: &tauri::AppHandle,
+    method_name: &'static str,
+) -> Result<String, String> {
+    let window = app.get_webview_window("main").ok_or_else(|| {
+        "Could not access the main app window for Android media action.".to_string()
+    })?;
 
     let (tx, rx) = mpsc::channel();
 
@@ -300,8 +596,14 @@ fn run_android_media_action(app: &tauri::AppHandle, method_name: &'static str) -
                         .map_err(|e| format!("Could not find Android media saver: {e}"))?;
                     let saver_class = JClass::from(saver_class);
                     let saver_instance = env
-                        .get_static_field(&saver_class, "INSTANCE", "Lcom/cypher/qrstudioultra/MediaStoreSaver;")
-                        .map_err(|e| format!("Could not access Android media saver singleton: {e}"))?
+                        .get_static_field(
+                            &saver_class,
+                            "INSTANCE",
+                            "Lcom/cypher/qrstudioultra/MediaStoreSaver;",
+                        )
+                        .map_err(|e| {
+                            format!("Could not access Android media saver singleton: {e}")
+                        })?
                         .l()
                         .map_err(|e| format!("Android media saver singleton was invalid: {e}"))?;
 
@@ -314,7 +616,9 @@ fn run_android_media_action(app: &tauri::AppHandle, method_name: &'static str) -
                         )
                         .map_err(|e| format!("Android media action failed: {e}"))?
                         .l()
-                        .map_err(|e| format!("Android media action returned an invalid result: {e}"))?;
+                        .map_err(|e| {
+                            format!("Android media action returned an invalid result: {e}")
+                        })?;
 
                     let result = env
                         .get_string(&JString::from(result))
@@ -424,14 +728,31 @@ fn print_android_image(
 
 // Save into a user-visible folder on mobile whenever possible.
 #[tauri::command]
-async fn save_to_device(app: tauri::AppHandle, b64: String, format: String) -> Result<MobileSaveResult, String> {
+async fn save_to_device(
+    app: tauri::AppHandle,
+    b64: String,
+    format: String,
+) -> Result<MobileSaveResult, String> {
     let clean_b64 = strip_data_url_prefix(&b64);
-    let decoded = general_purpose::STANDARD.decode(clean_b64).map_err(|e| e.to_string())?;
+    let decoded = general_purpose::STANDARD
+        .decode(clean_b64)
+        .map_err(|e| e.to_string())?;
 
-    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let ext = if format.to_lowercase() == "jpg" { "jpg" } else { "png" };
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let ext = if format.to_lowercase() == "jpg" {
+        "jpg"
+    } else {
+        "png"
+    };
     let filename = format!("QR_Studio_{}.{}", timestamp, ext);
-    let mime_type = if ext == "jpg" { "image/jpeg" } else { "image/png" };
+    let mime_type = if ext == "jpg" {
+        "image/jpeg"
+    } else {
+        "image/png"
+    };
 
     #[cfg(target_os = "android")]
     {
@@ -447,7 +768,9 @@ async fn save_to_device(app: tauri::AppHandle, b64: String, format: String) -> R
     #[cfg(not(target_os = "android"))]
     {
         let _ = mime_type;
-        let target_dir = app.path().picture_dir()
+        let target_dir = app
+            .path()
+            .picture_dir()
             .or_else(|_| app.path().download_dir())
             .map_err(|e| format!("Could not locate a save folder: {}", e))?
             .join("QR Studio Ultra");
@@ -455,12 +778,14 @@ async fn save_to_device(app: tauri::AppHandle, b64: String, format: String) -> R
         println!("Final target directory: {}", target_dir.display());
 
         if !target_dir.exists() {
-            std::fs::create_dir_all(&target_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
 
         let file_path = target_dir.join(&filename);
-        std::fs::write(&file_path, decoded).map_err(|e| format!("Failed to write file {}: {}", file_path.display(), e))?;
-        
+        std::fs::write(&file_path, decoded)
+            .map_err(|e| format!("Failed to write file {}: {}", file_path.display(), e))?;
+
         let msg = format!("Saved to: {}", file_path.display());
 
         Ok(MobileSaveResult { message: msg })
@@ -468,9 +793,15 @@ async fn save_to_device(app: tauri::AppHandle, b64: String, format: String) -> R
 }
 
 #[tauri::command]
-async fn print_current_image(app: tauri::AppHandle, b64: String, title: String) -> Result<String, String> {
+async fn print_current_image(
+    app: tauri::AppHandle,
+    b64: String,
+    title: String,
+) -> Result<String, String> {
     let clean_b64 = strip_data_url_prefix(&b64);
-    let decoded = general_purpose::STANDARD.decode(clean_b64).map_err(|e| e.to_string())?;
+    let decoded = general_purpose::STANDARD
+        .decode(clean_b64)
+        .map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "android")]
     {
@@ -526,7 +857,7 @@ async fn share_last_saved_image(app: tauri::AppHandle) -> Result<String, String>
     }
 }
 
-#[allow(deprecated)] 
+#[allow(deprecated)]
 #[tauri::command]
 fn open_external_link(app: tauri::AppHandle, url: String) -> Result<String, String> {
     match app.shell().open(url, None) {
@@ -537,7 +868,7 @@ fn open_external_link(app: tauri::AppHandle, url: String) -> Result<String, Stri
 
 fn get_eye_coords(modules: i32) -> Vec<(i32, i32, i32, i32)> {
     vec![
-        (0, 7, 0, 7),           // Top-left
+        (0, 7, 0, 7),                 // Top-left
         (modules - 7, modules, 0, 7), // Top-right
         (0, 7, modules - 7, modules), // Bottom-left
     ]
@@ -693,6 +1024,328 @@ struct QrOptions {
     center_overlay_color_mode: Option<String>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct AiMagicResponse {
+    gradient_start: String,
+    gradient_mid: String,
+    gradient_end: String,
+    ring_color: String,
+    curved_text_top: Option<String>,
+    curved_text_bottom: Option<String>,
+    center_image_prompt: String,
+    overall_mood: String,
+    provider_used: Option<String>,
+    model_used: Option<String>,
+}
+
+#[derive(serde::Deserialize, Default)]
+struct AiProviderKeys {
+    groq: Option<String>,
+    gemini: Option<String>,
+    deepseek: Option<String>,
+    openrouter: Option<String>,
+}
+
+#[tauri::command]
+async fn ai_magic(
+    prompt: String,
+    preferred_provider: Option<String>,
+    api_keys: Option<AiProviderKeys>,
+    api_key: Option<String>,
+) -> Result<AiMagicResponse, String> {
+    let system_prompt = "You are a cinematic visual genius and master of emotional symbolism for QR Studio Ultra.
+
+Your goal is to create breathtaking, emotionally powerful, and visually explosive center images that feel like album art or movie posters.
+
+For prompts involving fire, soul, phoenix, rebirth, ignite, ashes, etc.:
+- Create dramatic, high-impact symbolism (phoenix rising, burning heart, flaming lotus, soul fire, etc.)
+- Use intense cinematic lighting, god rays, sparks, embers, and volumetric glow
+- Make the center image the emotional focal point — it should feel alive and legendary
+
+Always deliver extremely detailed, vivid center_image_prompts that would make artists jealous.
+
+Core rules you must follow:
+- Always include a rich, thematic, highly detailed \"center_image_prompt\"
+- Use vibrant multi-stop gradients with glowing effects
+- Include elegant curved text
+- Make every design visually spectacular and share-worthy
+
+Rules for every center image:
+- Extreme cinematic lighting, dramatic rim light, god rays, volumetric glow, and subtle particle effects
+- Insanely high detail: intricate textures, micro-details, reflections, and material perfection
+- Perfect composition that works beautifully inside a circular QR center emblem
+- Emotional impact: magical, powerful, seductive, transcendent, or mythic
+- Rich, luxurious, and slightly over-the-top in the best possible way
+- center_image_prompt must be a vivid, extremely detailed, single-sentence image-generation description suitable for Midjourney or Flux
+
+Example center_image_prompt quality:
+- \"A majestic glowing phoenix born from a supernova, wings made of liquid solar fire and crystalline embers, rising from cosmic ashes, intense cinematic lighting, volumetric god rays, hyper-detailed masterpiece\"
+- \"A burning soul represented as a heart-shaped nebula of white-hot plasma, encased in cracked obsidian porcelain, glowing cracks leaking divine light, surrounded by a swirl of golden sparks, unreal detail\"
+
+Respond with ONLY valid JSON. Do not add any extra text, explanations, or markdown.
+
+{
+  \"gradient_start\": \"#hex\",
+  \"gradient_mid\": \"#hex\",
+  \"gradient_end\": \"#hex\",
+  \"ring_color\": \"#hex\",
+  \"curved_text_top\": \"short catchy text\",
+  \"curved_text_bottom\": \"short catchy text or null\",
+  \"center_image_prompt\": \"MUST be filled with a detailed, vivid, artistic description for the center image\",
+  \"overall_mood\": \"mystical | cyberpunk | luxurious | futuristic | playful | elegant | dark | vibrant\"
+}";
+
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let keys = api_keys.unwrap_or_default();
+    let provider_order = build_ai_provider_order(preferred_provider.as_deref().unwrap_or("groq"));
+    let mut errors = Vec::new();
+
+    for provider in provider_order {
+        let Some(provider_key) = get_ai_provider_key(provider, &keys, api_key.as_deref()) else {
+            errors.push(format!("{}: no API key configured", provider_label(provider)));
+            continue;
+        };
+
+        match call_ai_provider(
+            &client,
+            provider,
+            &provider_key,
+            system_prompt,
+            &prompt,
+        )
+        .await
+        {
+            Ok(result) => return Ok(result),
+            Err(error) => errors.push(format!("{}: {}", provider_label(provider), error)),
+        }
+    }
+
+    Err(format!("AI Magic failed for all configured providers. {}", errors.join(" | ")))
+}
+
+fn build_ai_provider_order(preferred: &str) -> Vec<&'static str> {
+    let providers = ["groq", "gemini", "deepseek", "openrouter"];
+    let normalized = normalize_ai_provider(preferred);
+    let mut ordered = vec![normalized];
+    ordered.extend(providers.into_iter().filter(|provider| *provider != normalized));
+    ordered
+}
+
+fn normalize_ai_provider(provider: &str) -> &'static str {
+    match provider.to_ascii_lowercase().as_str() {
+        "gemini" => "gemini",
+        "deepseek" => "deepseek",
+        "openrouter" => "openrouter",
+        _ => "groq",
+    }
+}
+
+fn provider_label(provider: &str) -> &'static str {
+    match provider {
+        "gemini" => "Gemini",
+        "deepseek" => "DeepSeek",
+        "openrouter" => "OpenRouter",
+        _ => "Groq",
+    }
+}
+
+fn provider_model(provider: &str) -> &'static str {
+    match provider {
+        "gemini" => "gemini-2.5-flash",
+        "deepseek" => "deepseek-chat",
+        "openrouter" => "openrouter/auto",
+        _ => "llama-3.3-70b-versatile",
+    }
+}
+
+fn get_ai_provider_key(
+    provider: &str,
+    keys: &AiProviderKeys,
+    legacy_groq_key: Option<&str>,
+) -> Option<String> {
+    let configured = match provider {
+        "gemini" => keys.gemini.as_deref(),
+        "deepseek" => keys.deepseek.as_deref(),
+        "openrouter" => keys.openrouter.as_deref(),
+        _ => keys.groq.as_deref().or(legacy_groq_key),
+    };
+
+    configured
+        .filter(|key| !key.trim().is_empty())
+        .map(|key| key.trim().to_string())
+        .or_else(|| {
+            let env_key = match provider {
+                "gemini" => "GEMINI_API_KEY",
+                "deepseek" => "DEEPSEEK_API_KEY",
+                "openrouter" => "OPENROUTER_API_KEY",
+                _ => "GROQ_API_KEY",
+            };
+            std::env::var(env_key).ok().filter(|key| !key.trim().is_empty())
+        })
+}
+
+async fn call_ai_provider(
+    client: &reqwest::Client,
+    provider: &str,
+    api_key: &str,
+    system_prompt: &str,
+    prompt: &str,
+) -> Result<AiMagicResponse, String> {
+    let model = provider_model(provider);
+    let user_prompt = format!("{} Create a premium QR Studio Ultra design using the exact JSON schema. The center_image_prompt MUST be non-empty, vivid, extremely detailed, single-sentence, artistically masterful, thematically perfect, and composed to work inside a circular QR center.", prompt);
+
+    let content = if provider == "gemini" {
+        call_gemini(client, api_key, model, system_prompt, &user_prompt).await?
+    } else {
+        call_openai_compatible(client, provider, api_key, model, system_prompt, &user_prompt).await?
+    };
+
+    let mut ai_res: AiMagicResponse = decode_ai_magic_content(&content)?;
+    if ai_res.center_image_prompt.trim().is_empty() {
+        return Err("AI response left center_image_prompt empty".to_string());
+    }
+    ai_res.provider_used = Some(provider.to_string());
+    ai_res.model_used = Some(model.to_string());
+    Ok(ai_res)
+}
+
+async fn call_openai_compatible(
+    client: &reqwest::Client,
+    provider: &str,
+    api_key: &str,
+    model: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> Result<String, String> {
+    let url = match provider {
+        "deepseek" => "https://api.deepseek.com/chat/completions",
+        "openrouter" => "https://openrouter.ai/api/v1/chat/completions",
+        _ => "https://api.groq.com/openai/v1/chat/completions",
+    };
+
+    let mut request = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key));
+
+    if provider == "openrouter" {
+        request = request
+            .header("HTTP-Referer", "https://qr-studio-ultra.local")
+            .header("X-Title", "QR Studio Ultra");
+    }
+
+    let response = request
+        .json(&serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.9,
+            "max_tokens": 1200
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    let status = response.status();
+    let body_text = response.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!("API error (Status {}): {}", status, body_text));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body_text).map_err(|e| {
+        format!("Failed to parse provider response as JSON. Error: {}. Raw: {}", e, body_text)
+    })?;
+
+    if let Some(error) = json.get("error") {
+        return Err(format!("AI API Error Object: {}", error));
+    }
+
+    json["choices"][0]["message"]["content"].as_str()
+        .map(|content| content.to_string())
+        .ok_or_else(|| format!("AI response missing content. Full JSON: {}", json))
+}
+
+async fn call_gemini(
+    client: &reqwest::Client,
+    api_key: &str,
+    model: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> Result<String, String> {
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+        model, api_key
+    );
+
+    let response = client
+        .post(url)
+        .json(&serde_json::json!({
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": user_prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.9,
+                "maxOutputTokens": 1200,
+                "responseMimeType": "application/json"
+            }
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    let status = response.status();
+    let body_text = response.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!("API error (Status {}): {}", status, body_text));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body_text).map_err(|e| {
+        format!("Failed to parse Gemini response as JSON. Error: {}. Raw: {}", e, body_text)
+    })?;
+
+    json["candidates"][0]["content"]["parts"][0]["text"].as_str()
+        .map(|content| content.to_string())
+        .ok_or_else(|| format!("Gemini response missing content. Full JSON: {}", json))
+}
+
+fn decode_ai_magic_content(content: &str) -> Result<AiMagicResponse, String> {
+    // Try to strip any markdown code block if the AI ignored the "no markdown blocks" rule
+    let cleaned_content = content.trim()
+        .strip_prefix("```json").unwrap_or(content)
+        .strip_prefix("```").unwrap_or(content)
+        .strip_suffix("```").unwrap_or(content)
+        .trim();
+
+    // Sometimes the AI might still include the ```json prefix even after strip_prefix if there's whitespace or newlines
+    let second_pass = if cleaned_content.starts_with("```json") {
+        cleaned_content.strip_prefix("```json").unwrap_or(cleaned_content).trim()
+    } else if cleaned_content.starts_with("```") {
+        cleaned_content.strip_prefix("```").unwrap_or(cleaned_content).trim()
+    } else {
+        cleaned_content
+    };
+    
+    let final_content = second_pass.strip_suffix("```").unwrap_or(second_pass).trim();
+
+    serde_json::from_str(final_content)
+        .map_err(|e| format!("Failed to decode design JSON: {}. Content was: {}", e, final_content))
+}
+
 fn svg_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -810,11 +1463,41 @@ fn get_qr_svg_size(shape: &str) -> f32 {
 
 fn get_flat_badge_y(shape: &str, is_top: bool) -> f32 {
     match shape {
-        "diamond" => if is_top { 148.0 } else { 640.0 },
-        "octagon" => if is_top { 118.0 } else { 670.0 },
-        "rounded" => if is_top { 98.0 } else { 690.0 },
-        "circle" => if is_top { 88.0 } else { 700.0 },
-        _ => if is_top { 88.0 } else { 700.0 },
+        "diamond" => {
+            if is_top {
+                148.0
+            } else {
+                640.0
+            }
+        }
+        "octagon" => {
+            if is_top {
+                118.0
+            } else {
+                670.0
+            }
+        }
+        "rounded" => {
+            if is_top {
+                98.0
+            } else {
+                690.0
+            }
+        }
+        "circle" => {
+            if is_top {
+                88.0
+            } else {
+                700.0
+            }
+        }
+        _ => {
+            if is_top {
+                88.0
+            } else {
+                700.0
+            }
+        }
     }
 }
 
@@ -863,11 +1546,19 @@ fn get_center_overlay_dimensions(logo_render_width: f32, logo_render_height: f32
     )
 }
 
-fn get_logo_render_dimensions_from_b64(logo_b64: &str, rendered_qr_size: f32, logo_size_percent: u32) -> Option<(f32, f32)> {
-    let decoded = general_purpose::STANDARD.decode(strip_data_url_prefix(logo_b64)).ok()?;
+fn get_logo_render_dimensions_from_b64(
+    logo_b64: &str,
+    rendered_qr_size: f32,
+    logo_size_percent: u32,
+) -> Option<(f32, f32)> {
+    let decoded = general_purpose::STANDARD
+        .decode(strip_data_url_prefix(logo_b64))
+        .ok()?;
     let logo = image::load_from_memory(&decoded).ok()?.to_rgba8();
     let trimmed = trim_transparent_logo(&logo);
-    let max_size = ((rendered_qr_size) * (logo_size_percent as f32 / 100.0)).round().max(1.0) as u32;
+    let max_size = ((rendered_qr_size) * (logo_size_percent as f32 / 100.0))
+        .round()
+        .max(1.0) as u32;
     let (width, height) = fit_contain_dimensions(trimmed.width(), trimmed.height(), max_size);
     Some((width as f32, height as f32))
 }
@@ -898,13 +1589,21 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
             return (cx - radius + f * side, cy - radius, 0.0);
         } else if p < 0.5 {
             let f = (p - 0.25) / 0.25;
-            return (cx + radius, cy - radius + f * side, std::f32::consts::FRAC_PI_2);
+            return (
+                cx + radius,
+                cy - radius + f * side,
+                std::f32::consts::FRAC_PI_2,
+            );
         } else if p < 0.75 {
             let f = (p - 0.5) / 0.25;
             return (cx + radius - f * side, cy + radius, std::f32::consts::PI);
         } else {
             let f = (p - 0.75) / 0.25;
-            return (cx - radius, cy + radius - f * side, -std::f32::consts::FRAC_PI_2);
+            return (
+                cx - radius,
+                cy + radius - f * side,
+                -std::f32::consts::FRAC_PI_2,
+            );
         }
     }
 
@@ -912,7 +1611,11 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
         let p = (progress + 0.125).rem_euclid(1.0);
         if p < 0.25 {
             let f = p / 0.25;
-            return (cx + f * radius, cy - radius + f * radius, std::f32::consts::FRAC_PI_4);
+            return (
+                cx + f * radius,
+                cy - radius + f * radius,
+                std::f32::consts::FRAC_PI_4,
+            );
         } else if p < 0.5 {
             let f = (p - 0.25) / 0.25;
             return (
@@ -929,7 +1632,11 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
             );
         } else {
             let f = (p - 0.75) / 0.25;
-            return (cx - radius + f * radius, cy - f * radius, -std::f32::consts::FRAC_PI_4);
+            return (
+                cx - radius + f * radius,
+                cy - f * radius,
+                -std::f32::consts::FRAC_PI_4,
+            );
         }
     }
 
@@ -941,11 +1648,27 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
             (cx - radius * 0.28, cy - radius, 0.0),
             (cx + radius * 0.28, cy - radius, std::f32::consts::FRAC_PI_4),
             (cx + radius, cy - radius * 0.28, std::f32::consts::FRAC_PI_2),
-            (cx + radius, cy + radius * 0.28, 3.0 * std::f32::consts::FRAC_PI_4),
+            (
+                cx + radius,
+                cy + radius * 0.28,
+                3.0 * std::f32::consts::FRAC_PI_4,
+            ),
             (cx + radius * 0.28, cy + radius, std::f32::consts::PI),
-            (cx - radius * 0.28, cy + radius, -3.0 * std::f32::consts::FRAC_PI_4),
-            (cx - radius, cy + radius * 0.28, -std::f32::consts::FRAC_PI_2),
-            (cx - radius, cy - radius * 0.28, -std::f32::consts::FRAC_PI_4),
+            (
+                cx - radius * 0.28,
+                cy + radius,
+                -3.0 * std::f32::consts::FRAC_PI_4,
+            ),
+            (
+                cx - radius,
+                cy + radius * 0.28,
+                -std::f32::consts::FRAC_PI_2,
+            ),
+            (
+                cx - radius,
+                cy - radius * 0.28,
+                -std::f32::consts::FRAC_PI_4,
+            ),
         ];
         let p1 = pts[seg];
         let p2 = pts[(seg + 1) % 8];
@@ -963,14 +1686,19 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
         if d < side {
             return (cx - (radius - r) + d, cy - radius, 0.0);
         } else if d < side + arc_len {
-            let a = (d - side) / arc_len * std::f32::consts::FRAC_PI_2 - std::f32::consts::FRAC_PI_2;
+            let a =
+                (d - side) / arc_len * std::f32::consts::FRAC_PI_2 - std::f32::consts::FRAC_PI_2;
             return (
                 cx + (radius - r) + a.cos() * r,
                 cy - (radius - r) + a.sin() * r,
                 a + std::f32::consts::FRAC_PI_2,
             );
         } else if d < 2.0 * side + arc_len {
-            return (cx + radius, cy - (radius - r) + (d - side - arc_len), std::f32::consts::FRAC_PI_2);
+            return (
+                cx + radius,
+                cy - (radius - r) + (d - side - arc_len),
+                std::f32::consts::FRAC_PI_2,
+            );
         } else if d < 2.0 * side + 2.0 * arc_len {
             let a = (d - 2.0 * side - arc_len) / arc_len * std::f32::consts::FRAC_PI_2;
             return (
@@ -979,9 +1707,14 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
                 a + std::f32::consts::FRAC_PI_2,
             );
         } else if d < 3.0 * side + 2.0 * arc_len {
-            return (cx + (radius - r) - (d - 2.0 * side - 2.0 * arc_len), cy + radius, std::f32::consts::PI);
+            return (
+                cx + (radius - r) - (d - 2.0 * side - 2.0 * arc_len),
+                cy + radius,
+                std::f32::consts::PI,
+            );
         } else if d < 3.0 * side + 3.0 * arc_len {
-            let a = (d - 3.0 * side - 2.0 * arc_len) / arc_len * std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2;
+            let a = (d - 3.0 * side - 2.0 * arc_len) / arc_len * std::f32::consts::FRAC_PI_2
+                + std::f32::consts::FRAC_PI_2;
             return (
                 cx - (radius - r) + a.cos() * r,
                 cy + (radius - r) + a.sin() * r,
@@ -994,7 +1727,8 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
                 -std::f32::consts::FRAC_PI_2,
             );
         } else {
-            let a = (d - 4.0 * side - 3.0 * arc_len) / arc_len * std::f32::consts::FRAC_PI_2 + std::f32::consts::PI;
+            let a = (d - 4.0 * side - 3.0 * arc_len) / arc_len * std::f32::consts::FRAC_PI_2
+                + std::f32::consts::PI;
             return (
                 cx - (radius - r) + a.cos() * r,
                 cy - (radius - r) + a.sin() * r,
@@ -1004,7 +1738,11 @@ fn get_path_point(shape: &str, progress: f32, radius: f32, cx: f32, cy: f32) -> 
     }
 
     let a = progress * std::f32::consts::PI * 2.0 - std::f32::consts::FRAC_PI_2;
-    (cx + a.cos() * radius, cy + a.sin() * radius, a + std::f32::consts::FRAC_PI_2)
+    (
+        cx + a.cos() * radius,
+        cy + a.sin() * radius,
+        a + std::f32::consts::FRAC_PI_2,
+    )
 }
 
 fn build_base_qr_svg(options: &QrOptions, size: u32) -> Result<String, String> {
@@ -1027,7 +1765,8 @@ fn build_base_qr_svg(options: &QrOptions, size: u32) -> Result<String, String> {
         .qr_options(QROptions::new().with_error_correction_level(ErrorCorrectionLevel::H))
         .dots_options(dots)
         .corners_square_options(
-            CornersSquareOptions::new(map_corner_square_type(&options.eye_shape)).with_color(eye_out),
+            CornersSquareOptions::new(map_corner_square_type(&options.eye_shape))
+                .with_color(eye_out),
         )
         .corners_dot_options(
             CornersDotOptions::new(map_corner_dot_type(&options.eye_shape)).with_color(eye_in),
@@ -1041,7 +1780,11 @@ fn build_base_qr_svg(options: &QrOptions, size: u32) -> Result<String, String> {
         let logo_bytes = general_purpose::STANDARD
             .decode(strip_data_url_prefix(logo_b64))
             .map_err(|e| e.to_string())?;
-        let trimmed_logo = trim_transparent_logo(&image::load_from_memory(&logo_bytes).map_err(|e| e.to_string())?.to_rgba8());
+        let trimmed_logo = trim_transparent_logo(
+            &image::load_from_memory(&logo_bytes)
+                .map_err(|e| e.to_string())?
+                .to_rgba8(),
+        );
         let mut trimmed_logo_buffer = Cursor::new(Vec::new());
         image::DynamicImage::ImageRgba8(trimmed_logo)
             .write_to(&mut trimmed_logo_buffer, ImageFormat::Png)
@@ -1062,8 +1805,18 @@ fn build_base_qr_svg(options: &QrOptions, size: u32) -> Result<String, String> {
     Ok(inject_svg_background(svg, &options.bg_color))
 }
 
-fn build_linear_gradient_def(id: &str, c1: &str, c2: &str, c3: &str, c4: &str, use_fourth: bool) -> String {
-    let mut defs = format!(r#"<linearGradient id="{}" x1="0%" y1="0%" x2="100%" y2="100%">"#, id);
+fn build_linear_gradient_def(
+    id: &str,
+    c1: &str,
+    c2: &str,
+    c3: &str,
+    c4: &str,
+    use_fourth: bool,
+) -> String {
+    let mut defs = format!(
+        r#"<linearGradient id="{}" x1="0%" y1="0%" x2="100%" y2="100%">"#,
+        id
+    );
     let _ = write!(defs, r#"<stop offset="0%" stop-color="{}"/>"#, c1);
     let _ = write!(defs, r#"<stop offset="50%" stop-color="{}"/>"#, c2);
     let _ = write!(defs, r#"<stop offset="80%" stop-color="{}"/>"#, c3);
@@ -1077,14 +1830,27 @@ fn build_linear_gradient_def(id: &str, c1: &str, c2: &str, c3: &str, c4: &str, u
 fn build_frame_gradient_def(options: &QrOptions) -> Option<String> {
     let ring_style = options.ring_style.as_deref().unwrap_or("solid");
     let ring_color_mode = options.ring_color_mode.as_deref().unwrap_or("solid");
-    let use_gradient = ring_style != "solid" && ring_style != "none" && ring_color_mode == "gradient";
+    let use_gradient =
+        ring_style != "solid" && ring_style != "none" && ring_color_mode == "gradient";
     if !use_gradient {
         return None;
     }
 
-    let use_match_main = options.ring_gradient_mode.as_deref().unwrap_or("match-main") == "match-main";
-    let c1 = if use_match_main { &options.color1 } else { options.ring_color.as_deref().unwrap_or(&options.color1) };
-    let c2 = if use_match_main { &options.color2 } else { options.ring_color2.as_deref().unwrap_or(&options.color2) };
+    let use_match_main = options
+        .ring_gradient_mode
+        .as_deref()
+        .unwrap_or("match-main")
+        == "match-main";
+    let c1 = if use_match_main {
+        &options.color1
+    } else {
+        options.ring_color.as_deref().unwrap_or(&options.color1)
+    };
+    let c2 = if use_match_main {
+        &options.color2
+    } else {
+        options.ring_color2.as_deref().unwrap_or(&options.color2)
+    };
     let c3 = if use_match_main {
         options.color3.as_deref().unwrap_or(&options.color2)
     } else {
@@ -1101,46 +1867,87 @@ fn build_frame_gradient_def(options: &QrOptions) -> Option<String> {
         options.ring_color4.as_deref().unwrap_or(c3)
     };
 
-    Some(build_linear_gradient_def("frameRingGradient", c1, c2, c3, c4, use_fourth))
+    Some(build_linear_gradient_def(
+        "frameRingGradient",
+        c1,
+        c2,
+        c3,
+        c4,
+        use_fourth,
+    ))
 }
 
 fn build_center_overlay_gradient_def(options: &QrOptions) -> Option<String> {
     let mode = options.center_overlay_mode.as_deref().unwrap_or("none");
-    if mode == "none" || options.logo_b64.as_ref().filter(|v| !v.is_empty()).is_none() {
+    if mode == "none"
+        || options
+            .logo_b64
+            .as_ref()
+            .filter(|v| !v.is_empty())
+            .is_none()
+    {
         return None;
     }
     if mode == "match" {
-        return build_frame_gradient_def(options)
-            .map(|_| String::new());
+        return build_frame_gradient_def(options).map(|_| String::new());
     }
 
     let style = options.center_overlay_style.as_deref().unwrap_or("solid");
-    let color_mode = options.center_overlay_color_mode.as_deref().unwrap_or("solid");
+    let color_mode = options
+        .center_overlay_color_mode
+        .as_deref()
+        .unwrap_or("solid");
     let use_gradient = style != "solid" && style != "none" && color_mode == "gradient";
     if !use_gradient {
         return None;
     }
 
-    let gradient_mode = options.center_overlay_gradient_mode.as_deref().unwrap_or("match-outer");
+    let gradient_mode = options
+        .center_overlay_gradient_mode
+        .as_deref()
+        .unwrap_or("match-outer");
     let (c1, c2, c3, c4, use_fourth) = if gradient_mode == "match-main" {
         (
             options.color1.as_str(),
             options.color2.as_str(),
             options.color3.as_deref().unwrap_or(&options.color2),
-            options.color4.as_deref().unwrap_or(options.color3.as_deref().unwrap_or(&options.color2)),
+            options
+                .color4
+                .as_deref()
+                .unwrap_or(options.color3.as_deref().unwrap_or(&options.color2)),
             options.color4.is_some(),
         )
     } else if gradient_mode == "match-outer" {
-        let use_match_main = options.ring_gradient_mode.as_deref().unwrap_or("match-main") == "match-main";
-        let c1 = if use_match_main { &options.color1 } else { options.ring_color.as_deref().unwrap_or(&options.color1) };
-        let c2 = if use_match_main { &options.color2 } else { options.ring_color2.as_deref().unwrap_or(&options.color2) };
+        let use_match_main = options
+            .ring_gradient_mode
+            .as_deref()
+            .unwrap_or("match-main")
+            == "match-main";
+        let c1 = if use_match_main {
+            &options.color1
+        } else {
+            options.ring_color.as_deref().unwrap_or(&options.color1)
+        };
+        let c2 = if use_match_main {
+            &options.color2
+        } else {
+            options.ring_color2.as_deref().unwrap_or(&options.color2)
+        };
         let c3 = if use_match_main {
             options.color3.as_deref().unwrap_or(&options.color2)
         } else {
             options.ring_color3.as_deref().unwrap_or(c2)
         };
-        let use_fourth = if use_match_main { options.color4.is_some() } else { options.ring_use_fourth_stop.unwrap_or(false) };
-        let c4 = if use_match_main { options.color4.as_deref().unwrap_or(c3) } else { options.ring_color4.as_deref().unwrap_or(c3) };
+        let use_fourth = if use_match_main {
+            options.color4.is_some()
+        } else {
+            options.ring_use_fourth_stop.unwrap_or(false)
+        };
+        let c4 = if use_match_main {
+            options.color4.as_deref().unwrap_or(c3)
+        } else {
+            options.ring_color4.as_deref().unwrap_or(c3)
+        };
         (c1, c2, c3, c4, use_fourth)
     } else {
         let c1 = options.center_overlay_color.as_deref().unwrap_or("#000000");
@@ -1151,7 +1958,14 @@ fn build_center_overlay_gradient_def(options: &QrOptions) -> Option<String> {
         (c1, c2, c3, c4, use_fourth)
     };
 
-    Some(build_linear_gradient_def("centerOverlayGradient", c1, c2, c3, c4, use_fourth))
+    Some(build_linear_gradient_def(
+        "centerOverlayGradient",
+        c1,
+        c2,
+        c3,
+        c4,
+        use_fourth,
+    ))
 }
 
 fn build_ring_paths_rect(
@@ -1177,7 +1991,13 @@ fn build_ring_paths_rect(
 
     if style == "double" {
         let outer = shape_path_d_rect(shape, cx, cy, width, height);
-        let inner = shape_path_d_rect(shape, cx, cy, width - base_line * 1.5, height - base_line * 1.5);
+        let inner = shape_path_d_rect(
+            shape,
+            cx,
+            cy,
+            width - base_line * 1.5,
+            height - base_line * 1.5,
+        );
         return format!(
             r#"<path d="{}" {} stroke-width="{:.2}"/><path d="{}" {} stroke-width="{:.2}"/>"#,
             outer,
@@ -1190,7 +2010,12 @@ fn build_ring_paths_rect(
     }
 
     if style == "dashed" {
-        let _ = write!(attrs, r#"stroke-dasharray="{:.2} {:.2}" "#, base_line * 2.0, base_line * 2.0);
+        let _ = write!(
+            attrs,
+            r#"stroke-dasharray="{:.2} {:.2}" "#,
+            base_line * 2.0,
+            base_line * 2.0
+        );
     } else if style == "dotted" {
         let _ = write!(attrs, r#"stroke-dasharray="{:.2} {:.2}" "#, 2.0, 6.0);
     }
@@ -1207,11 +2032,22 @@ fn build_ring_paths_rect(
             2.0_f32.max(width.min(height) * 0.006)
         )
     } else {
-        format!(r#"<path d="{}" {} stroke-width="{:.2}"/>"#, path, attrs, base_line)
+        format!(
+            r#"<path d="{}" {} stroke-width="{:.2}"/>"#,
+            path, attrs, base_line
+        )
     }
 }
 
-fn build_ring_paths(shape: &str, cx: f32, cy: f32, size: f32, style: &str, stroke: &str, glow_id: &str) -> String {
+fn build_ring_paths(
+    shape: &str,
+    cx: f32,
+    cy: f32,
+    size: f32,
+    style: &str,
+    stroke: &str,
+    glow_id: &str,
+) -> String {
     build_ring_paths_rect(shape, cx, cy, size, size, style, stroke, glow_id)
 }
 
@@ -1221,12 +2057,33 @@ fn build_ring_svg(options: &QrOptions) -> String {
     let use_gradient = options.ring_color_mode.as_deref().unwrap_or("solid") == "gradient"
         && ring_style != "solid"
         && ring_style != "none";
-    let stroke = if use_gradient { "url(#frameRingGradient)" } else { ring_color };
-    build_ring_paths(&options.bg_shape, 400.0, 400.0, 700.0, ring_style, stroke, "frameNeonGlow")
+    let stroke = if use_gradient {
+        "url(#frameRingGradient)"
+    } else {
+        ring_color
+    };
+    build_ring_paths(
+        &options.bg_shape,
+        400.0,
+        400.0,
+        700.0,
+        ring_style,
+        stroke,
+        "frameNeonGlow",
+    )
 }
 
-fn build_center_overlay_svg(options: &QrOptions, canvas_size: f32, rendered_qr_size: f32) -> String {
-    if options.logo_b64.as_ref().filter(|v| !v.is_empty()).is_none() {
+fn build_center_overlay_svg(
+    options: &QrOptions,
+    canvas_size: f32,
+    rendered_qr_size: f32,
+) -> String {
+    if options
+        .logo_b64
+        .as_ref()
+        .filter(|v| !v.is_empty())
+        .is_none()
+    {
         return String::new();
     }
     let mode = options.center_overlay_mode.as_deref().unwrap_or("none");
@@ -1239,14 +2096,30 @@ fn build_center_overlay_svg(options: &QrOptions, canvas_size: f32, rendered_qr_s
         let use_gradient = options.ring_color_mode.as_deref().unwrap_or("solid") == "gradient"
             && ring_style != "solid"
             && ring_style != "none";
-        let stroke = if use_gradient { "url(#frameRingGradient)" } else { options.ring_color.as_deref().unwrap_or("#000000") };
+        let stroke = if use_gradient {
+            "url(#frameRingGradient)"
+        } else {
+            options.ring_color.as_deref().unwrap_or("#000000")
+        };
         (ring_style.to_string(), stroke.to_string())
     } else {
-        let style = options.center_overlay_style.as_deref().unwrap_or("solid").to_string();
-        let use_gradient = options.center_overlay_color_mode.as_deref().unwrap_or("solid") == "gradient"
+        let style = options
+            .center_overlay_style
+            .as_deref()
+            .unwrap_or("solid")
+            .to_string();
+        let use_gradient = options
+            .center_overlay_color_mode
+            .as_deref()
+            .unwrap_or("solid")
+            == "gradient"
             && style != "solid"
             && style != "none";
-        let stroke = if use_gradient { "url(#centerOverlayGradient)" } else { options.center_overlay_color.as_deref().unwrap_or("#000000") };
+        let stroke = if use_gradient {
+            "url(#centerOverlayGradient)"
+        } else {
+            options.center_overlay_color.as_deref().unwrap_or("#000000")
+        };
         (style, stroke.to_string())
     };
 
@@ -1266,10 +2139,25 @@ fn build_center_overlay_svg(options: &QrOptions, canvas_size: f32, rendered_qr_s
     };
     let (overlay_width, overlay_height) = get_center_overlay_dimensions(logo_width, logo_height);
     let center = canvas_size / 2.0;
-    build_ring_paths_rect(&options.bg_shape, center, center, overlay_width, overlay_height, &style, &stroke, "centerOverlayGlow")
+    build_ring_paths_rect(
+        &options.bg_shape,
+        center,
+        center,
+        overlay_width,
+        overlay_height,
+        &style,
+        &stroke,
+        "centerOverlayGlow",
+    )
 }
 
-fn build_text_color(current_color: &str, match_style: bool, ring_style: &str, use_gradient: bool, ring_color: &str) -> String {
+fn build_text_color(
+    current_color: &str,
+    match_style: bool,
+    ring_style: &str,
+    use_gradient: bool,
+    ring_color: &str,
+) -> String {
     if match_style {
         if use_gradient {
             "url(#frameRingGradient)".to_string()
@@ -1318,13 +2206,22 @@ fn build_flat_text_svg(
         options.frame_text_size.unwrap_or(44.0)
     };
     let badge_y = get_flat_badge_y(&options.bg_shape, is_top);
-    let approx_width = text.chars().map(|ch| approximate_char_width(ch, font_size, 0.0)).sum::<f32>();
+    let approx_width = text
+        .chars()
+        .map(|ch| approximate_char_width(ch, font_size, 0.0))
+        .sum::<f32>();
     let badge_width = approx_width + 80.0;
     let badge_height = 70.0;
     let bx = 400.0 - badge_width / 2.0;
     let by = badge_y - badge_height / 2.0;
     let ring_color = options.ring_color.as_deref().unwrap_or("#000000");
-    let fill = build_text_color(current_color, match_style, ring_style, use_gradient, ring_color);
+    let fill = build_text_color(
+        current_color,
+        match_style,
+        ring_style,
+        use_gradient,
+        ring_color,
+    );
     let mut svg = String::new();
 
     if !transparent_bg {
@@ -1332,26 +2229,22 @@ fn build_flat_text_svg(
             let _ = write!(
                 svg,
                 r#"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" rx="15" ry="15" fill="{}"/>"#,
-                bx,
-                by,
-                badge_width,
-                badge_height,
-                options.bg_color
+                bx, by, badge_width, badge_height, options.bg_color
             );
         } else {
             let _ = write!(
                 svg,
                 r#"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" fill="{}"/>"#,
-                bx,
-                by,
-                badge_width,
-                badge_height,
-                options.bg_color
+                bx, by, badge_width, badge_height, options.bg_color
             );
         }
 
         if match_style && !matches!(ring_style, "none" | "neon" | "gradient") {
-            let stroke_attr = if use_gradient { "url(#frameRingGradient)" } else { ring_color };
+            let stroke_attr = if use_gradient {
+                "url(#frameRingGradient)"
+            } else {
+                ring_color
+            };
             let dash = if ring_style == "dotted" {
                 r#" stroke-dasharray="2 6""#
             } else if ring_style == "dashed" {
@@ -1366,7 +2259,11 @@ fn build_flat_text_svg(
                 by,
                 badge_width,
                 badge_height,
-                if ring_style == "rounded" || options.bg_shape == "rounded" { r#"rx="15" ry="15""# } else { "" },
+                if ring_style == "rounded" || options.bg_shape == "rounded" {
+                    r#"rx="15" ry="15""#
+                } else {
+                    ""
+                },
                 stroke_attr,
                 dash,
                 if ring_style == "double" { r#""# } else { "" }
@@ -1379,7 +2276,11 @@ fn build_flat_text_svg(
                     by + 5.0,
                     badge_width - 10.0,
                     badge_height - 10.0,
-                    if ring_style == "rounded" || options.bg_shape == "rounded" { r#"rx="12" ry="12""# } else { "" },
+                    if ring_style == "rounded" || options.bg_shape == "rounded" {
+                        r#"rx="12" ry="12""#
+                    } else {
+                        ""
+                    },
                     stroke_attr,
                 );
             }
@@ -1389,10 +2290,7 @@ fn build_flat_text_svg(
     let _ = write!(
         svg,
         r#"<text x="400" y="{:.2}" text-anchor="middle" dominant-baseline="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="{:.2}" font-weight="700" fill="{}">{}</text>"#,
-        badge_y,
-        font_size,
-        fill,
-        text_upper
+        badge_y, font_size, fill, text_upper
     );
     svg
 }
@@ -1434,7 +2332,13 @@ fn build_curved_text_svg(
         options.match_text_style.unwrap_or(false)
     };
     let ring_color = options.ring_color.as_deref().unwrap_or("#000000");
-    let fill = build_text_color(current_color, match_style, ring_style, use_gradient, ring_color);
+    let fill = build_text_color(
+        current_color,
+        match_style,
+        ring_style,
+        use_gradient,
+        ring_color,
+    );
 
     let curved_radius = get_curved_text_radius(requested_radius, font_size, ring_style);
     let chars: Vec<char> = text.to_uppercase().chars().collect();
@@ -1454,9 +2358,20 @@ fn build_curved_text_svg(
 
     let mut svg = String::new();
     for (index, ch) in chars.iter().enumerate() {
-        let char_progress = current_progress + direction * (char_widths[index] / 2.0) * width_to_progress;
-        let (x, y, angle) = get_path_point(&options.bg_shape, char_progress, curved_radius, 400.0, 400.0);
-        let rotation = if is_top { angle } else { angle + std::f32::consts::PI };
+        let char_progress =
+            current_progress + direction * (char_widths[index] / 2.0) * width_to_progress;
+        let (x, y, angle) = get_path_point(
+            &options.bg_shape,
+            char_progress,
+            curved_radius,
+            400.0,
+            400.0,
+        );
+        let rotation = if is_top {
+            angle
+        } else {
+            angle + std::f32::consts::PI
+        };
         let _ = write!(
             svg,
             r#"<text x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="{:.2}" font-weight="700" fill="{}" transform="translate({:.2} {:.2}) rotate({:.2})">{}</text>"#,
@@ -1484,15 +2399,39 @@ fn build_frame_text_svg(options: &QrOptions) -> String {
 
     let mut svg = String::new();
     if top_mode == "curved" {
-        svg.push_str(&build_curved_text_svg(top_text, true, options, ring_style, use_gradient));
+        svg.push_str(&build_curved_text_svg(
+            top_text,
+            true,
+            options,
+            ring_style,
+            use_gradient,
+        ));
     } else {
-        svg.push_str(&build_flat_text_svg(top_text, true, options, ring_style, use_gradient));
+        svg.push_str(&build_flat_text_svg(
+            top_text,
+            true,
+            options,
+            ring_style,
+            use_gradient,
+        ));
     }
 
     if bottom_mode == "curved" {
-        svg.push_str(&build_curved_text_svg(bottom_text, false, options, ring_style, use_gradient));
+        svg.push_str(&build_curved_text_svg(
+            bottom_text,
+            false,
+            options,
+            ring_style,
+            use_gradient,
+        ));
     } else {
-        svg.push_str(&build_flat_text_svg(bottom_text, false, options, ring_style, use_gradient));
+        svg.push_str(&build_flat_text_svg(
+            bottom_text,
+            false,
+            options,
+            ring_style,
+            use_gradient,
+        ));
     }
     svg
 }
@@ -1553,7 +2492,9 @@ fn build_svg_qr(options: &QrOptions) -> Result<String, String> {
         let base = build_base_qr_svg(options, 600)?;
         let nested_qr = strip_xml_declaration(&base);
         let center_gradient_def = build_center_overlay_gradient_def(options).unwrap_or_default();
-        let center_neon_def = if options.center_overlay_style.as_deref().unwrap_or("solid") == "neon" {
+        let center_neon_def = if options.center_overlay_style.as_deref().unwrap_or("solid")
+            == "neon"
+        {
             r#"<filter id="centerOverlayGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>"#.to_string()
         } else {
             String::new()
@@ -1586,7 +2527,10 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
     let logo_size_percent = options.logo_size.unwrap_or(22).clamp(10, 36);
     let logo_opacity_percent = options.logo_opacity.unwrap_or(100).clamp(15, 100);
 
-    let qrcode = QRBuilder::new(data).ecl(fast_qr::ECL::H).build().map_err(|e| e.to_string())?;
+    let qrcode = QRBuilder::new(data)
+        .ecl(fast_qr::ECL::H)
+        .build()
+        .map_err(|e| e.to_string())?;
 
     let width = 600u32;
     let height = 600u32;
@@ -1615,10 +2559,10 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
             for (sample_dx, sample_dy) in sample_offsets {
                 let mod_x_f32 = ((x as f32 + sample_dx) / width as f32) * total_modules;
                 let mod_y_f32 = ((y as f32 + sample_dy) / height as f32) * total_modules;
-                
+
                 let qr_x_f32 = mod_x_f32 - margin;
                 let qr_y_f32 = mod_y_f32 - margin;
-                
+
                 let qr_x = qr_x_f32.floor() as i32;
                 let qr_y = qr_y_f32.floor() as i32;
 
@@ -1655,47 +2599,73 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
 
                     if eye_shape == "circle" {
                         let dist = (dx * dx + dy * dy).sqrt();
-                        if dist <= 1.5 { paint = true; sample_color = e_in; }
-                        else if (2.5..=3.5).contains(&dist) { paint = true; sample_color = e_out; }
+                        if dist <= 1.5 {
+                            paint = true;
+                            sample_color = e_in;
+                        } else if (2.5..=3.5).contains(&dist) {
+                            paint = true;
+                            sample_color = e_out;
+                        }
                     } else if eye_shape == "diamond" {
                         let dist = dx.abs() + dy.abs();
-                        if dist <= 2.0 { paint = true; sample_color = e_in; }
-                        else if (3.0..=5.0).contains(&dist) { paint = true; sample_color = e_out; }
+                        if dist <= 2.0 {
+                            paint = true;
+                            sample_color = e_in;
+                        } else if (3.0..=5.0).contains(&dist) {
+                            paint = true;
+                            sample_color = e_out;
+                        }
                     } else if eye_shape == "rounded" {
                         let adx = dx.abs();
                         let ady = dy.abs();
                         let mut in_inner = false;
                         if adx <= 1.5 && ady <= 1.5 {
-                            if adx < 1.0 || ady < 1.0 { in_inner = true; }
-                            else {
+                            if adx < 1.0 || ady < 1.0 {
+                                in_inner = true;
+                            } else {
                                 let cx = adx - 1.0;
                                 let cy = ady - 1.0;
-                                if cx * cx + cy * cy <= 0.25 { in_inner = true; }
+                                if cx * cx + cy * cy <= 0.25 {
+                                    in_inner = true;
+                                }
                             }
                         }
 
                         let mut in_outer = false;
                         if adx <= 3.5 && ady <= 3.5 {
-                            if adx < 2.5 || ady < 2.5 { in_outer = true; }
-                            else {
+                            if adx < 2.5 || ady < 2.5 {
+                                in_outer = true;
+                            } else {
                                 let cx = adx - 2.5;
                                 let cy = ady - 2.5;
-                                if cx * cx + cy * cy <= 1.0 { in_outer = true; }
+                                if cx * cx + cy * cy <= 1.0 {
+                                    in_outer = true;
+                                }
                             }
                         }
 
-                        if in_inner { paint = true; sample_color = e_in; }
-                        else if in_outer && (adx >= 2.5 || ady >= 2.5) { paint = true; sample_color = e_out; }
+                        if in_inner {
+                            paint = true;
+                            sample_color = e_in;
+                        } else if in_outer && (adx >= 2.5 || ady >= 2.5) {
+                            paint = true;
+                            sample_color = e_out;
+                        }
                     } else if module_is_dark {
                         paint = true;
-                        if dx.abs() <= 1.5 && dy.abs() <= 1.5 { sample_color = e_in; }
-                        else { sample_color = e_out; }
+                        if dx.abs() <= 1.5 && dy.abs() <= 1.5 {
+                            sample_color = e_in;
+                        } else {
+                            sample_color = e_out;
+                        }
                     }
                 } else if !is_eye_reserved && module_is_dark {
                     if main_shape == "circle" {
                         let dx = local_x - 0.5;
                         let dy = local_y - 0.5;
-                        if dx * dx + dy * dy <= 0.21 { paint = true; }
+                        if dx * dx + dy * dy <= 0.21 {
+                            paint = true;
+                        }
                     } else if main_shape == "rounded" {
                         let dx = (local_x - 0.5).abs();
                         let dy = (local_y - 0.5).abs();
@@ -1704,19 +2674,29 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
                         } else {
                             let cx = dx - 0.34;
                             let cy = dy - 0.34;
-                            if cx * cx + cy * cy <= 0.028 { paint = true; }
+                            if cx * cx + cy * cy <= 0.028 {
+                                paint = true;
+                            }
                         }
                     } else if main_shape == "diamond" {
                         let dx = (local_x - 0.5).abs();
                         let dy = (local_y - 0.5).abs();
-                        if dx + dy <= 0.52 { paint = true; }
+                        if dx + dy <= 0.52 {
+                            paint = true;
+                        }
                     } else {
                         paint = true;
                     }
 
                     if paint {
                         sample_color = if fill_type == "Linear" {
-                            gradient_color_at(c1, c2, c3, c4, (y as f32 + sample_dy) / height as f32)
+                            gradient_color_at(
+                                c1,
+                                c2,
+                                c3,
+                                c4,
+                                (y as f32 + sample_dy) / height as f32,
+                            )
                         } else {
                             c1
                         };
@@ -1750,18 +2730,23 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
 
     if let Some(logo_str) = logo_b64 {
         let clean_b64 = strip_data_url_prefix(&logo_str);
-        
+
         if let Ok(decoded) = general_purpose::STANDARD.decode(clean_b64) {
             if let Ok(logo_img) = image::load_from_memory(&decoded) {
                 let trimmed_logo = trim_transparent_logo(&logo_img.to_rgba8());
-                let logo_size = ((width as f32) * (logo_size_percent as f32 / 100.0)).round() as u32;
+                let logo_size =
+                    ((width as f32) * (logo_size_percent as f32 / 100.0)).round() as u32;
                 let (target_width, target_height) = fit_contain_dimensions(
                     trimmed_logo.width(),
                     trimmed_logo.height(),
                     logo_size.max(1),
                 );
                 let resized_logo = image::DynamicImage::ImageRgba8(trimmed_logo)
-                    .resize(target_width, target_height, image::imageops::FilterType::Lanczos3)
+                    .resize(
+                        target_width,
+                        target_height,
+                        image::imageops::FilterType::Lanczos3,
+                    )
                     .to_rgba8();
 
                 let x_offset = (width - resized_logo.width()) / 2;
@@ -1781,7 +2766,13 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
                         if target_x >= width || target_y >= height {
                             continue;
                         }
-                        if point_in_shape_rect(&bg_shape, local_x as f32, local_y as f32, padded_width as f32, padded_height as f32) {
+                        if point_in_shape_rect(
+                            &bg_shape,
+                            local_x as f32,
+                            local_y as f32,
+                            padded_width as f32,
+                            padded_height as f32,
+                        ) {
                             img.put_pixel(target_x, target_y, Rgba([255, 255, 255, 255]));
                         }
                     }
@@ -1789,7 +2780,13 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
 
                 for local_x in 0..resized_logo.width() {
                     for local_y in 0..resized_logo.height() {
-                        if !point_in_shape_rect(&bg_shape, local_x as f32, local_y as f32, resized_logo.width() as f32, resized_logo.height() as f32) {
+                        if !point_in_shape_rect(
+                            &bg_shape,
+                            local_x as f32,
+                            local_y as f32,
+                            resized_logo.width() as f32,
+                            resized_logo.height() as f32,
+                        ) {
                             continue;
                         }
 
@@ -1805,7 +2802,8 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
                         }
 
                         let mut adjusted_src = src;
-                        adjusted_src[3] = ((adjusted_src[3] as f32) * (logo_opacity_percent as f32 / 100.0))
+                        adjusted_src[3] = ((adjusted_src[3] as f32)
+                            * (logo_opacity_percent as f32 / 100.0))
                             .round()
                             .clamp(0.0, 255.0) as u8;
                         if adjusted_src[3] == 0 {
@@ -1821,13 +2819,140 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
     }
 
     let mut buffer = Cursor::new(Vec::new());
-    img.write_to(&mut buffer, ImageFormat::Png).map_err(|e| e.to_string())?;
-    Ok(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(buffer.into_inner())))
+    img.write_to(&mut buffer, ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(format!(
+        "data:image/png;base64,{}",
+        general_purpose::STANDARD.encode(buffer.into_inner())
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_encrypt_decrypt_qr_payload_roundtrip() {
+        let plaintext = "offline secret for a QR code";
+        let encrypted = encrypt_qr_payload(
+            plaintext.to_string(),
+            "strong passphrase".to_string(),
+            None,
+            None,
+        )
+        .expect("payload should encrypt");
+
+        assert!(encrypted.starts_with(ENCRYPTED_QR_PREFIX));
+        assert_ne!(encrypted, plaintext);
+
+        let decrypted = decrypt_qr_payload(encrypted, "strong passphrase".to_string())
+            .expect("payload should decrypt");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_qr_payload_aes_256_gcm_roundtrip() {
+        let plaintext = "offline AES secret for a QR code";
+        let encrypted = encrypt_qr_payload(
+            plaintext.to_string(),
+            "strong passphrase".to_string(),
+            Some(ENCRYPTED_QR_ALGORITHM_AES256.to_string()),
+            None,
+        )
+        .expect("payload should encrypt");
+
+        let decrypted = decrypt_qr_payload(encrypted, "strong passphrase".to_string())
+            .expect("payload should decrypt");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_decrypt_qr_payload_wrong_password_fails() {
+        let encrypted = encrypt_qr_payload(
+            "secret".to_string(),
+            "correct passphrase".to_string(),
+            None,
+            None,
+        )
+        .expect("payload should encrypt");
+
+        let result = decrypt_qr_payload(encrypted, "wrong passphrase".to_string());
+        assert!(result.is_err());
+    }
+
+    fn decode_encrypted_qr_payload(encrypted: &str) -> EncryptedQrPayload {
+        let encoded = encrypted
+            .strip_prefix(ENCRYPTED_QR_PREFIX)
+            .expect("payload should have prefix");
+        let json = general_purpose::URL_SAFE_NO_PAD
+            .decode(encoded)
+            .expect("payload should decode");
+        serde_json::from_slice(&json).expect("payload should be JSON")
+    }
+
+    fn encode_encrypted_qr_payload(payload: &EncryptedQrPayload) -> String {
+        let json = serde_json::to_vec(payload).expect("payload should serialize");
+        format!(
+            "{}{}",
+            ENCRYPTED_QR_PREFIX,
+            general_purpose::URL_SAFE_NO_PAD.encode(json)
+        )
+    }
+
+    #[test]
+    fn test_encrypt_qr_payload_includes_forensic_date() {
+        let plaintext = "dated evidence note";
+        let encrypted = encrypt_qr_payload(
+            plaintext.to_string(),
+            "strong passphrase".to_string(),
+            None,
+            Some("30/04/2026".to_string()),
+        )
+        .expect("payload should encrypt");
+        let payload = decode_encrypted_qr_payload(&encrypted);
+
+        assert_eq!(payload.created_date.as_deref(), Some("30/04/2026"));
+        let decrypted = decrypt_qr_payload(encrypted, "strong passphrase".to_string())
+            .expect("payload should decrypt");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_decrypt_qr_payload_forensic_date_tamper_fails() {
+        let encrypted = encrypt_qr_payload(
+            "dated evidence note".to_string(),
+            "strong passphrase".to_string(),
+            None,
+            Some("30/04/2026".to_string()),
+        )
+        .expect("payload should encrypt");
+        let mut payload = decode_encrypted_qr_payload(&encrypted);
+        payload.created_date = Some("01/05/2026".to_string());
+        let tampered = encode_encrypted_qr_payload(&payload);
+
+        let result = decrypt_qr_payload(tampered, "strong passphrase".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encrypt_qr_payload_rejects_invalid_forensic_date() {
+        let result = encrypt_qr_payload(
+            "secret".to_string(),
+            "strong passphrase".to_string(),
+            None,
+            Some("2026-04-30".to_string()),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decrypt_qr_payload_invalid_payload_fails() {
+        let result = decrypt_qr_payload(
+            "not-an-encrypted-payload".to_string(),
+            "passphrase".to_string(),
+        );
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_eye_coords() {
@@ -1965,14 +3090,19 @@ pub fn run() {
 
     builder
         .invoke_handler(tauri::generate_handler![
-            generate_ultra_qr, 
-            save_to_device, 
+            generate_ultra_qr,
+            save_to_device,
             save_to_path,
             save_svg_to_path,
+            generate_ultra_qr_svg,
+            encrypt_qr_payload,
+            decrypt_qr_payload,
+            save_batch_as_zip,
             open_external_link,
             open_last_saved_image,
             share_last_saved_image,
-            print_current_image
+            print_current_image,
+            ai_magic
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

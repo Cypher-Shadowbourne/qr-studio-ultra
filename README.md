@@ -62,6 +62,7 @@ QR Studio Ultra currently supports:
 - Frame and ring overlays
 - Center logo upload with crop, size, and opacity controls
 - QR and barcode scanning
+- Encrypted QR payload generation and decryption
 - Wallet/payment QR creation with saved wallet profiles
 - Common payload presets like URL, Wi-Fi, vCard, email, SMS, phone, geo, event, social links, and more
 - Desktop Tauri use and Android packaging
@@ -74,6 +75,7 @@ QR Studio Ultra currently supports:
 | Logos      | upload, crop, center placement, size control, opacity control                                   |
 | Scanner    | QR, Code 128, EAN, UPC, ISBN, Code 39, PDF417 and more; square targeting UI, animated scan line |
 | Payloads   | URL, Wi-Fi, vCard, email, SMS, phone, geo, event, social, crypto and more                       |
+| Encryption | passphrase-protected QR payloads (ChaCha20-Poly1305, AES-256-GCM), local-only processing        |
 | Crypto     | wallet profiles, richer payment URI generation, optional amount/label/message                   |
 | Platforms  | Tauri desktop workflow, Android builds, native save/share integration                           |
 | Rendering  | Rust-backed QR generation and logo compositing                                                  |
@@ -85,6 +87,7 @@ Most QR apps are either too plain, too intrusive, or too careless about quality.
 QR Studio Ultra takes a different route:
 
 - generation stays local
+- encryption stays on-device
 - rendering quality matters
 - exports are meant to look intentional
 - scanning reliability is treated as a product concern, not an afterthought
@@ -149,6 +152,17 @@ It now supports:
 - optional amount, label, and message fields
 - richer URI generation for supported networks
 
+### Encrypted Payloads
+
+QR Studio Ultra includes a built-in engine for creating and reading encrypted QR codes.
+
+Key security features:
+
+- **Local Processing**: Encryption and decryption happen entirely on-device in the Rust backend.
+- **Strong Algorithms**: Supports **ChaCha20-Poly1305** (default) and **AES-256-GCM**.
+- **Key Derivation**: Uses **Argon2id** for robust password-based key derivation.
+- **Portable Format**: Encrypted payloads use a custom `QRU1:` prefix, allowing the app to automatically detect and prompt for passphrases when scanning.
+
 ## Showcase Notes
 
 The app is meant to cover two use cases that usually get split across multiple tools:
@@ -167,28 +181,78 @@ The result is intentionally a little more ambitious than a standard generator.
 
 ## Tech Stack
 
-- Frontend: Svelte, TypeScript, Canvas
-- Native shell: Tauri 2
+- Frontend: Svelte 5, TypeScript, Canvas
+- Native shell: Tauri 2.0
 - Backend: Rust
+- Package Manager: npm
 - QR engine: `fast_qr`
 - Image processing: `image`
-- Native plugins: barcode scanner, dialog, shell/opener
+- Native plugins: barcode scanner, dialog, shell/opener, opener
+
+## Scripts
+
+The following scripts are available in `package.json`:
+
+| Script | Description |
+| :--- | :--- |
+| `npm run dev` | Starts the Vite development server for the web UI. |
+| `npm run build` | Builds the frontend for production. |
+| `npm run preview` | Previews the production build locally. |
+| `npm run check` | Runs Svelte-check and syncs Svelte-Kit. |
+| `npm run check:watch` | Runs Svelte-check in watch mode. |
+| `npm run test` | Runs frontend tests using Vitest. |
+| `npm run test:watch` | Runs frontend tests in watch mode. |
+| `npm run test:rust` | Runs Rust backend tests using Cargo. |
+| `npm run tauri` | Wrapper for the Tauri CLI. |
+
+To run the app in development mode (Desktop):
+```bash
+npm run tauri dev
+```
+
+To build the app for production (Desktop):
+```bash
+npm run tauri build
+```
+
+## Environment Variables
+
+| Variable | Description | Required |
+| :--- | :--- | :--- |
+| `TODO` | Identify any required environment variables for CI/CD or specialized builds. | No |
+
+*Note: For Android builds, sensitive information is typically handled via `keystore.properties` (see `keystore.properties.example`).*
+
+## Tests
+
+### Frontend Tests
+The frontend uses **Vitest** for unit and component testing.
+```bash
+npm run test
+```
+
+### Backend Tests
+The Rust backend uses standard **Cargo** tests.
+```bash
+npm run test:rust
+```
 
 ## Project Structure
 
 Key areas of the repo:
 
-- `src/routes/+page.svelte`
-  Main app UI, state, QR options, overlays, scanner UX, wallet flow
-
-- `src-tauri/src/lib.rs`
-  Native commands, QR rendering, image composition, mobile/desktop save logic
-
-- `src-tauri/tauri.conf.json`
-  Tauri app configuration
-
-- `src-tauri/gen/android`
-  Generated Android project files and Android-specific patches
+- `src/`
+  Frontend source code (Svelte 5).
+  - `src/routes/+page.svelte`: Main app UI, state, QR options, overlays, scanner UX, wallet flow, and encryption/decryption views.
+- `src-tauri/`
+  Native backend and configuration (Tauri/Rust).
+  - `src-tauri/src/lib.rs`: Native commands, QR rendering, image composition, mobile/desktop save logic.
+  - `src-tauri/tauri.conf.json`: Tauri app configuration.
+  - `src-tauri/gen/android`: Generated Android project files and Android-specific patches.
+- `static/`
+  Static assets for the frontend.
+- `docs/`
+  Project documentation and screenshots.
 
 ## Running the Project
 

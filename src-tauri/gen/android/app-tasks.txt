@@ -1,0 +1,1367 @@
+> Task :buildSrc:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :buildSrc:compileKotlin UP-TO-DATE
+> Task :buildSrc:compileJava NO-SOURCE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:pluginDescriptors UP-TO-DATE
+> Task :buildSrc:processResources UP-TO-DATE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+
+> Task :app:tasks
+
+------------------------------------------------------------
+Tasks runnable from project ':app'
+------------------------------------------------------------
+
+Android tasks
+-------------
+androidDependencies - Displays the Android dependencies of the project.
+signingReport - Displays the signing info for the base and test modules
+sourceSets - Prints out all the source sets defined in this project.
+
+Build tasks
+-----------
+assemble - Assemble main outputs for all the variants.
+assembleAndroidTest - Assembles all the Test applications.
+assembleArm - Assembles main outputs for all Arm variants.
+assembleArm64 - Assembles main outputs for all Arm64 variants.
+assembleDebug - Assembles main outputs for all Debug variants.
+assembleRelease - Assembles main outputs for all Release variants.
+assembleUnitTest - Assembles all the unit test applications.
+assembleUniversal - Assembles main outputs for all Universal variants.
+assembleX86 - Assembles main outputs for all X86 variants.
+assembleX86_64 - Assembles main outputs for all X86_64 variants.
+build - Assembles and tests this project.
+buildDependents - Assembles and tests this project and all projects that depend on it.
+buildKotlinToolingMetadata - Build metadata json file containing information about the used Kotlin tooling
+buildNeeded - Assembles and tests this project and all projects it depends on.
+bundle - Assemble bundles for all the variants.
+bundleArm - Assembles bundles for all Arm variants.
+bundleArm64 - Assembles bundles for all Arm64 variants.
+bundleDebug - Assembles bundles for all Debug variants.
+bundleRelease - Assembles bundles for all Release variants.
+bundleUniversal - Assembles bundles for all Universal variants.
+bundleX86 - Assembles bundles for all X86 variants.
+bundleX86_64 - Assembles bundles for all X86_64 variants.
+clean - Deletes the build directory.
+compileArm64DebugAndroidTestSources
+compileArm64DebugSources
+compileArm64DebugUnitTestSources
+compileArm64ReleaseSources
+compileArm64ReleaseUnitTestSources
+compileArmDebugAndroidTestSources
+compileArmDebugSources
+compileArmDebugUnitTestSources
+compileArmReleaseSources
+compileArmReleaseUnitTestSources
+compileUniversalDebugAndroidTestSources
+compileUniversalDebugSources
+compileUniversalDebugUnitTestSources
+compileUniversalReleaseSources
+compileUniversalReleaseUnitTestSources
+compileX86_64DebugAndroidTestSources
+compileX86_64DebugSources
+compileX86_64DebugUnitTestSources
+compileX86_64ReleaseSources
+compileX86_64ReleaseUnitTestSources
+compileX86DebugAndroidTestSources
+compileX86DebugSources
+compileX86DebugUnitTestSources
+compileX86ReleaseSources
+compileX86ReleaseUnitTestSources
+
+Help tasks
+----------
+artifactTransforms - Displays the Artifact Transforms that can be executed in project ':app'.
+buildEnvironment - Displays all buildscript dependencies declared in project ':app'.
+dependencies - Displays all dependencies declared in project ':app'.
+dependencyInsight - Displays the insight into a specific dependency in project ':app'.
+help - Displays a help message.
+javaToolchains - Displays the detected java toolchains.
+kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions and conventions.
+outgoingVariants - Displays the outgoing variants of project ':app'.
+projects - Displays the sub-projects of project ':app'.
+properties - Displays the properties of project ':app'.
+resolvableConfigurations - Displays the configurations that can be resolved in project ':app'.
+tasks - Displays the tasks runnable from project ':app'.
+
+Install tasks
+-------------
+installArm64Debug - Installs the Debug build for flavor Arm64.
+installArm64DebugAndroidTest - Installs the android (on device) tests for the Arm64Debug build.
+installArm64Release - Installs the Release build for flavor Arm64.
+installArmDebug - Installs the Debug build for flavor Arm.
+installArmDebugAndroidTest - Installs the android (on device) tests for the ArmDebug build.
+installArmRelease - Installs the Release build for flavor Arm.
+installUniversalDebug - Installs the Debug build for flavor Universal.
+installUniversalDebugAndroidTest - Installs the android (on device) tests for the UniversalDebug build.
+installUniversalRelease - Installs the Release build for flavor Universal.
+installX86_64Debug - Installs the Debug build for flavor X86_64.
+installX86_64DebugAndroidTest - Installs the android (on device) tests for the X86_64Debug build.
+installX86_64Release - Installs the Release build for flavor X86_64.
+installX86Debug - Installs the Debug build for flavor X86.
+installX86DebugAndroidTest - Installs the android (on device) tests for the X86Debug build.
+installX86Release - Installs the Release build for flavor X86.
+uninstallAll - Uninstall all applications.
+uninstallArm64Debug - Uninstalls the Debug build for flavor Arm64.
+uninstallArm64DebugAndroidTest - Uninstalls the android (on device) tests for the Arm64Debug build.
+uninstallArm64Release - Uninstalls the Release build for flavor Arm64.
+uninstallArmDebug - Uninstalls the Debug build for flavor Arm.
+uninstallArmDebugAndroidTest - Uninstalls the android (on device) tests for the ArmDebug build.
+uninstallArmRelease - Uninstalls the Release build for flavor Arm.
+uninstallUniversalDebug - Uninstalls the Debug build for flavor Universal.
+uninstallUniversalDebugAndroidTest - Uninstalls the android (on device) tests for the UniversalDebug build.
+uninstallUniversalRelease - Uninstalls the Release build for flavor Universal.
+uninstallX86_64Debug - Uninstalls the Debug build for flavor X86_64.
+uninstallX86_64DebugAndroidTest - Uninstalls the android (on device) tests for the X86_64Debug build.
+uninstallX86_64Release - Uninstalls the Release build for flavor X86_64.
+uninstallX86Debug - Uninstalls the Debug build for flavor X86.
+uninstallX86DebugAndroidTest - Uninstalls the android (on device) tests for the X86Debug build.
+uninstallX86Release - Uninstalls the Release build for flavor X86.
+
+Rust tasks
+----------
+rustBuildArm64Debug - Build dynamic library in debug mode for arm64
+rustBuildArm64Release - Build dynamic library in release mode for arm64
+rustBuildArmDebug - Build dynamic library in debug mode for arm
+rustBuildArmRelease - Build dynamic library in release mode for arm
+rustBuildUniversalDebug - Build dynamic library in debug mode for all targets
+rustBuildUniversalRelease - Build dynamic library in release mode for all targets
+rustBuildX86_64Debug - Build dynamic library in debug mode for x86_64
+rustBuildX86_64Release - Build dynamic library in release mode for x86_64
+rustBuildX86Debug - Build dynamic library in debug mode for x86
+rustBuildX86Release - Build dynamic library in release mode for x86
+
+Verification tasks
+------------------
+check - Runs all checks.
+checkJetifier - Checks whether Jetifier is needed for the current project
+checkKotlinGradlePluginConfigurationErrors - Checks that Kotlin Gradle Plugin hasn't reported project configuration errors, failing otherwise. This task always runs before compileKotlin* or similar tasks.
+connectedAndroidTest - Installs and runs instrumentation tests for all flavors on connected devices.
+connectedArm64DebugAndroidTest - Installs and runs the tests for arm64Debug on connected devices.
+connectedArmDebugAndroidTest - Installs and runs the tests for armDebug on connected devices.
+connectedCheck - Runs all device checks on currently connected devices.
+connectedUniversalDebugAndroidTest - Installs and runs the tests for universalDebug on connected devices.
+connectedX86_64DebugAndroidTest - Installs and runs the tests for x86_64Debug on connected devices.
+connectedX86DebugAndroidTest - Installs and runs the tests for x86Debug on connected devices.
+deviceAndroidTest - Installs and runs instrumentation tests using all Device Providers.
+deviceCheck - Runs all device checks using Device Providers and Test Servers.
+lint - Runs lint on the default variant.
+lintArm64Debug - Print text output from the corresponding lint report task
+lintArm64Release - Print text output from the corresponding lint report task
+lintArmDebug - Print text output from the corresponding lint report task
+lintArmRelease - Print text output from the corresponding lint report task
+lintFix - Runs lint on the default variant and applies any safe suggestions to the source code.
+lintUniversalDebug - Print text output from the corresponding lint report task
+lintUniversalRelease - Print text output from the corresponding lint report task
+lintVitalArm64Release - Print text output from the corresponding lint report task
+lintVitalArmRelease - Print text output from the corresponding lint report task
+lintVitalUniversalRelease - Print text output from the corresponding lint report task
+lintVitalX86_64Release - Print text output from the corresponding lint report task
+lintVitalX86Release - Print text output from the corresponding lint report task
+lintX86_64Debug - Print text output from the corresponding lint report task
+lintX86_64Release - Print text output from the corresponding lint report task
+lintX86Debug - Print text output from the corresponding lint report task
+lintX86Release - Print text output from the corresponding lint report task
+test - Run unit tests for all variants.
+testArm64DebugUnitTest - Run unit tests for the arm64Debug build.
+testArm64ReleaseUnitTest - Run unit tests for the arm64Release build.
+testArmDebugUnitTest - Run unit tests for the armDebug build.
+testArmReleaseUnitTest - Run unit tests for the armRelease build.
+testUniversalDebugUnitTest - Run unit tests for the universalDebug build.
+testUniversalReleaseUnitTest - Run unit tests for the universalRelease build.
+testX86_64DebugUnitTest - Run unit tests for the x86_64Debug build.
+testX86_64ReleaseUnitTest - Run unit tests for the x86_64Release build.
+testX86DebugUnitTest - Run unit tests for the x86Debug build.
+testX86ReleaseUnitTest - Run unit tests for the x86Release build.
+updateLintBaseline - Updates the lint baseline using the default variant.
+
+Other tasks
+-----------
+analyzeArm64DebugAndroidTestDependencies
+analyzeArm64DebugDependencies
+analyzeArm64DebugUnitTestDependencies
+analyzeArm64ReleaseDependencies
+analyzeArm64ReleaseUnitTestDependencies
+analyzeArmDebugAndroidTestDependencies
+analyzeArmDebugDependencies
+analyzeArmDebugUnitTestDependencies
+analyzeArmReleaseDependencies
+analyzeArmReleaseUnitTestDependencies
+analyzeUniversalDebugAndroidTestDependencies
+analyzeUniversalDebugDependencies
+analyzeUniversalDebugUnitTestDependencies
+analyzeUniversalReleaseDependencies
+analyzeUniversalReleaseUnitTestDependencies
+analyzeX86_64DebugAndroidTestDependencies
+analyzeX86_64DebugDependencies
+analyzeX86_64DebugUnitTestDependencies
+analyzeX86_64ReleaseDependencies
+analyzeX86_64ReleaseUnitTestDependencies
+analyzeX86DebugAndroidTestDependencies
+analyzeX86DebugDependencies
+analyzeX86DebugUnitTestDependencies
+analyzeX86ReleaseDependencies
+analyzeX86ReleaseUnitTestDependencies
+asarToCompatSplitsForArm64Debug
+asarToCompatSplitsForArm64Release
+asarToCompatSplitsForArmDebug
+asarToCompatSplitsForArmRelease
+asarToCompatSplitsForUniversalDebug
+asarToCompatSplitsForUniversalRelease
+asarToCompatSplitsForX86_64Debug
+asarToCompatSplitsForX86_64Release
+asarToCompatSplitsForX86Debug
+asarToCompatSplitsForX86Release
+assembleArm64Debug - Assembles main output for variant arm64Debug
+assembleArm64DebugAndroidTest - Assembles main output for variant arm64DebugAndroidTest
+assembleArm64DebugUnitTest - Assembles main output for variant arm64DebugUnitTest
+assembleArm64Release - Assembles main output for variant arm64Release
+assembleArm64ReleaseUnitTest - Assembles main output for variant arm64ReleaseUnitTest
+assembleArmDebug - Assembles main output for variant armDebug
+assembleArmDebugAndroidTest - Assembles main output for variant armDebugAndroidTest
+assembleArmDebugUnitTest - Assembles main output for variant armDebugUnitTest
+assembleArmRelease - Assembles main output for variant armRelease
+assembleArmReleaseUnitTest - Assembles main output for variant armReleaseUnitTest
+assembleUniversalDebug - Assembles main output for variant universalDebug
+assembleUniversalDebugAndroidTest - Assembles main output for variant universalDebugAndroidTest
+assembleUniversalDebugUnitTest - Assembles main output for variant universalDebugUnitTest
+assembleUniversalRelease - Assembles main output for variant universalRelease
+assembleUniversalReleaseUnitTest - Assembles main output for variant universalReleaseUnitTest
+assembleX86_64Debug - Assembles main output for variant x86_64Debug
+assembleX86_64DebugAndroidTest - Assembles main output for variant x86_64DebugAndroidTest
+assembleX86_64DebugUnitTest - Assembles main output for variant x86_64DebugUnitTest
+assembleX86_64Release - Assembles main output for variant x86_64Release
+assembleX86_64ReleaseUnitTest - Assembles main output for variant x86_64ReleaseUnitTest
+assembleX86Debug - Assembles main output for variant x86Debug
+assembleX86DebugAndroidTest - Assembles main output for variant x86DebugAndroidTest
+assembleX86DebugUnitTest - Assembles main output for variant x86DebugUnitTest
+assembleX86Release - Assembles main output for variant x86Release
+assembleX86ReleaseUnitTest - Assembles main output for variant x86ReleaseUnitTest
+buildArm64DebugPreBundle
+buildArm64ReleasePreBundle
+buildArmDebugPreBundle
+buildArmReleasePreBundle
+buildUniversalDebugPreBundle
+buildUniversalReleasePreBundle
+buildX86_64DebugPreBundle
+buildX86_64ReleasePreBundle
+buildX86DebugPreBundle
+buildX86ReleasePreBundle
+bundleArm64Debug - Assembles bundle for variant arm64Debug
+bundleArm64DebugClassesToCompileJar
+bundleArm64DebugClassesToRuntimeJar
+bundleArm64DebugResources
+bundleArm64Release - Assembles bundle for variant arm64Release
+bundleArm64ReleaseClassesToCompileJar
+bundleArm64ReleaseClassesToRuntimeJar
+bundleArm64ReleaseResources
+bundleArmDebug - Assembles bundle for variant armDebug
+bundleArmDebugClassesToCompileJar
+bundleArmDebugClassesToRuntimeJar
+bundleArmDebugResources
+bundleArmRelease - Assembles bundle for variant armRelease
+bundleArmReleaseClassesToCompileJar
+bundleArmReleaseClassesToRuntimeJar
+bundleArmReleaseResources
+bundleUniversalDebug - Assembles bundle for variant universalDebug
+bundleUniversalDebugClassesToCompileJar
+bundleUniversalDebugClassesToRuntimeJar
+bundleUniversalDebugResources
+bundleUniversalRelease - Assembles bundle for variant universalRelease
+bundleUniversalReleaseClassesToCompileJar
+bundleUniversalReleaseClassesToRuntimeJar
+bundleUniversalReleaseResources
+bundleX86_64Debug - Assembles bundle for variant x86_64Debug
+bundleX86_64DebugClassesToCompileJar
+bundleX86_64DebugClassesToRuntimeJar
+bundleX86_64DebugResources
+bundleX86_64Release - Assembles bundle for variant x86_64Release
+bundleX86_64ReleaseClassesToCompileJar
+bundleX86_64ReleaseClassesToRuntimeJar
+bundleX86_64ReleaseResources
+bundleX86Debug - Assembles bundle for variant x86Debug
+bundleX86DebugClassesToCompileJar
+bundleX86DebugClassesToRuntimeJar
+bundleX86DebugResources
+bundleX86Release - Assembles bundle for variant x86Release
+bundleX86ReleaseClassesToCompileJar
+bundleX86ReleaseClassesToRuntimeJar
+bundleX86ReleaseResources
+checkArm64DebugAarMetadata
+checkArm64DebugAndroidTestAarMetadata
+checkArm64DebugAndroidTestDuplicateClasses
+checkArm64DebugDuplicateClasses
+checkArm64DebugManifest
+checkArm64ReleaseAarMetadata
+checkArm64ReleaseDuplicateClasses
+checkArm64ReleaseManifest
+checkArmDebugAarMetadata
+checkArmDebugAndroidTestAarMetadata
+checkArmDebugAndroidTestDuplicateClasses
+checkArmDebugDuplicateClasses
+checkArmDebugManifest
+checkArmReleaseAarMetadata
+checkArmReleaseDuplicateClasses
+checkArmReleaseManifest
+checkUniversalDebugAarMetadata
+checkUniversalDebugAndroidTestAarMetadata
+checkUniversalDebugAndroidTestDuplicateClasses
+checkUniversalDebugDuplicateClasses
+checkUniversalDebugManifest
+checkUniversalReleaseAarMetadata
+checkUniversalReleaseDuplicateClasses
+checkUniversalReleaseManifest
+checkX86_64DebugAarMetadata
+checkX86_64DebugAndroidTestAarMetadata
+checkX86_64DebugAndroidTestDuplicateClasses
+checkX86_64DebugDuplicateClasses
+checkX86_64DebugManifest
+checkX86_64ReleaseAarMetadata
+checkX86_64ReleaseDuplicateClasses
+checkX86_64ReleaseManifest
+checkX86DebugAarMetadata
+checkX86DebugAndroidTestAarMetadata
+checkX86DebugAndroidTestDuplicateClasses
+checkX86DebugDuplicateClasses
+checkX86DebugManifest
+checkX86ReleaseAarMetadata
+checkX86ReleaseDuplicateClasses
+checkX86ReleaseManifest
+collectArm64ReleaseDependencies
+collectArmReleaseDependencies
+collectUniversalReleaseDependencies
+collectX86_64ReleaseDependencies
+collectX86ReleaseDependencies
+compileArm64DebugAndroidTestJavaWithJavac
+compileArm64DebugAndroidTestKotlin - Compiles the arm64DebugAndroidTest kotlin.
+compileArm64DebugAndroidTestShaders
+compileArm64DebugArtProfile
+compileArm64DebugJavaWithJavac
+compileArm64DebugKotlin - Compiles the arm64Debug kotlin.
+compileArm64DebugShaders
+compileArm64DebugUnitTestJavaWithJavac
+compileArm64DebugUnitTestKotlin - Compiles the arm64DebugUnitTest kotlin.
+compileArm64ReleaseArtProfile
+compileArm64ReleaseJavaWithJavac
+compileArm64ReleaseKotlin - Compiles the arm64Release kotlin.
+compileArm64ReleaseShaders
+compileArm64ReleaseUnitTestJavaWithJavac
+compileArm64ReleaseUnitTestKotlin - Compiles the arm64ReleaseUnitTest kotlin.
+compileArmDebugAndroidTestJavaWithJavac
+compileArmDebugAndroidTestKotlin - Compiles the armDebugAndroidTest kotlin.
+compileArmDebugAndroidTestShaders
+compileArmDebugArtProfile
+compileArmDebugJavaWithJavac
+compileArmDebugKotlin - Compiles the armDebug kotlin.
+compileArmDebugShaders
+compileArmDebugUnitTestJavaWithJavac
+compileArmDebugUnitTestKotlin - Compiles the armDebugUnitTest kotlin.
+compileArmReleaseArtProfile
+compileArmReleaseJavaWithJavac
+compileArmReleaseKotlin - Compiles the armRelease kotlin.
+compileArmReleaseShaders
+compileArmReleaseUnitTestJavaWithJavac
+compileArmReleaseUnitTestKotlin - Compiles the armReleaseUnitTest kotlin.
+compileLint
+compileLintChecks
+compileUniversalDebugAndroidTestJavaWithJavac
+compileUniversalDebugAndroidTestKotlin - Compiles the universalDebugAndroidTest kotlin.
+compileUniversalDebugAndroidTestShaders
+compileUniversalDebugArtProfile
+compileUniversalDebugJavaWithJavac
+compileUniversalDebugKotlin - Compiles the universalDebug kotlin.
+compileUniversalDebugShaders
+compileUniversalDebugUnitTestJavaWithJavac
+compileUniversalDebugUnitTestKotlin - Compiles the universalDebugUnitTest kotlin.
+compileUniversalReleaseArtProfile
+compileUniversalReleaseJavaWithJavac
+compileUniversalReleaseKotlin - Compiles the universalRelease kotlin.
+compileUniversalReleaseShaders
+compileUniversalReleaseUnitTestJavaWithJavac
+compileUniversalReleaseUnitTestKotlin - Compiles the universalReleaseUnitTest kotlin.
+compileX86_64DebugAndroidTestJavaWithJavac
+compileX86_64DebugAndroidTestKotlin - Compiles the x86_64DebugAndroidTest kotlin.
+compileX86_64DebugAndroidTestShaders
+compileX86_64DebugArtProfile
+compileX86_64DebugJavaWithJavac
+compileX86_64DebugKotlin - Compiles the x86_64Debug kotlin.
+compileX86_64DebugShaders
+compileX86_64DebugUnitTestJavaWithJavac
+compileX86_64DebugUnitTestKotlin - Compiles the x86_64DebugUnitTest kotlin.
+compileX86_64ReleaseArtProfile
+compileX86_64ReleaseJavaWithJavac
+compileX86_64ReleaseKotlin - Compiles the x86_64Release kotlin.
+compileX86_64ReleaseShaders
+compileX86_64ReleaseUnitTestJavaWithJavac
+compileX86_64ReleaseUnitTestKotlin - Compiles the x86_64ReleaseUnitTest kotlin.
+compileX86DebugAndroidTestJavaWithJavac
+compileX86DebugAndroidTestKotlin - Compiles the x86DebugAndroidTest kotlin.
+compileX86DebugAndroidTestShaders
+compileX86DebugArtProfile
+compileX86DebugJavaWithJavac
+compileX86DebugKotlin - Compiles the x86Debug kotlin.
+compileX86DebugShaders
+compileX86DebugUnitTestJavaWithJavac
+compileX86DebugUnitTestKotlin - Compiles the x86DebugUnitTest kotlin.
+compileX86ReleaseArtProfile
+compileX86ReleaseJavaWithJavac
+compileX86ReleaseKotlin - Compiles the x86Release kotlin.
+compileX86ReleaseShaders
+compileX86ReleaseUnitTestJavaWithJavac
+compileX86ReleaseUnitTestKotlin - Compiles the x86ReleaseUnitTest kotlin.
+components - Displays the components produced by project ':app'. [deprecated]
+compressArm64DebugAndroidTestAssets
+compressArm64DebugAssets
+compressArm64ReleaseAssets
+compressArmDebugAndroidTestAssets
+compressArmDebugAssets
+compressArmReleaseAssets
+compressUniversalDebugAndroidTestAssets
+compressUniversalDebugAssets
+compressUniversalReleaseAssets
+compressX86_64DebugAndroidTestAssets
+compressX86_64DebugAssets
+compressX86_64ReleaseAssets
+compressX86DebugAndroidTestAssets
+compressX86DebugAssets
+compressX86ReleaseAssets
+configureArm64ReleaseDependencies
+configureArmReleaseDependencies
+configureUniversalReleaseDependencies
+configureX86_64ReleaseDependencies
+configureX86ReleaseDependencies
+consumeConfigAttr
+convertLinkedResourcesToBinaryArm64Release
+convertLinkedResourcesToBinaryArmRelease
+convertLinkedResourcesToBinaryUniversalRelease
+convertLinkedResourcesToBinaryX86_64Release
+convertLinkedResourcesToBinaryX86Release
+convertShrunkResourcesToBinaryArm64Release
+convertShrunkResourcesToBinaryArmRelease
+convertShrunkResourcesToBinaryUniversalRelease
+convertShrunkResourcesToBinaryX86_64Release
+convertShrunkResourcesToBinaryX86Release
+createArm64DebugAndroidTestApkListingFileRedirect
+createArm64DebugApkListingFileRedirect
+createArm64DebugApksFromBundleListingFileRedirect
+createArm64DebugBundleListingFileRedirect
+createArm64DebugCompatibleScreenManifests
+createArm64ReleaseApkListingFileRedirect
+createArm64ReleaseApksFromBundleListingFileRedirect
+createArm64ReleaseBundleListingFileRedirect
+createArm64ReleaseCompatibleScreenManifests
+createArmDebugAndroidTestApkListingFileRedirect
+createArmDebugApkListingFileRedirect
+createArmDebugApksFromBundleListingFileRedirect
+createArmDebugBundleListingFileRedirect
+createArmDebugCompatibleScreenManifests
+createArmReleaseApkListingFileRedirect
+createArmReleaseApksFromBundleListingFileRedirect
+createArmReleaseBundleListingFileRedirect
+createArmReleaseCompatibleScreenManifests
+createMockableJar
+createUniversalDebugAndroidTestApkListingFileRedirect
+createUniversalDebugApkListingFileRedirect
+createUniversalDebugApksFromBundleListingFileRedirect
+createUniversalDebugBundleListingFileRedirect
+createUniversalDebugCompatibleScreenManifests
+createUniversalReleaseApkListingFileRedirect
+createUniversalReleaseApksFromBundleListingFileRedirect
+createUniversalReleaseBundleListingFileRedirect
+createUniversalReleaseCompatibleScreenManifests
+createX86_64DebugAndroidTestApkListingFileRedirect
+createX86_64DebugApkListingFileRedirect
+createX86_64DebugApksFromBundleListingFileRedirect
+createX86_64DebugBundleListingFileRedirect
+createX86_64DebugCompatibleScreenManifests
+createX86_64ReleaseApkListingFileRedirect
+createX86_64ReleaseApksFromBundleListingFileRedirect
+createX86_64ReleaseBundleListingFileRedirect
+createX86_64ReleaseCompatibleScreenManifests
+createX86DebugAndroidTestApkListingFileRedirect
+createX86DebugApkListingFileRedirect
+createX86DebugApksFromBundleListingFileRedirect
+createX86DebugBundleListingFileRedirect
+createX86DebugCompatibleScreenManifests
+createX86ReleaseApkListingFileRedirect
+createX86ReleaseApksFromBundleListingFileRedirect
+createX86ReleaseBundleListingFileRedirect
+createX86ReleaseCompatibleScreenManifests
+dependentComponents - Displays the dependent components of components in project ':app'. [deprecated]
+desugarArm64DebugAndroidTestFileDependencies
+desugarArm64DebugFileDependencies
+desugarArmDebugAndroidTestFileDependencies
+desugarArmDebugFileDependencies
+desugarUniversalDebugAndroidTestFileDependencies
+desugarUniversalDebugFileDependencies
+desugarX86_64DebugAndroidTestFileDependencies
+desugarX86_64DebugFileDependencies
+desugarX86DebugAndroidTestFileDependencies
+desugarX86DebugFileDependencies
+dexBuilderArm64Debug
+dexBuilderArm64DebugAndroidTest
+dexBuilderArmDebug
+dexBuilderArmDebugAndroidTest
+dexBuilderUniversalDebug
+dexBuilderUniversalDebugAndroidTest
+dexBuilderX86_64Debug
+dexBuilderX86_64DebugAndroidTest
+dexBuilderX86Debug
+dexBuilderX86DebugAndroidTest
+expandArm64ReleaseArtProfileWildcards
+expandArmReleaseArtProfileWildcards
+expandUniversalReleaseArtProfileWildcards
+expandX86_64ReleaseArtProfileWildcards
+expandX86ReleaseArtProfileWildcards
+extractApksForArm64Debug
+extractApksForArm64Release
+extractApksForArmDebug
+extractApksForArmRelease
+extractApksForUniversalDebug
+extractApksForUniversalRelease
+extractApksForX86_64Debug
+extractApksForX86_64Release
+extractApksForX86Debug
+extractApksForX86Release
+extractApksFromBundleForArm64Debug
+extractApksFromBundleForArm64Release
+extractApksFromBundleForArmDebug
+extractApksFromBundleForArmRelease
+extractApksFromBundleForUniversalDebug
+extractApksFromBundleForUniversalRelease
+extractApksFromBundleForX86_64Debug
+extractApksFromBundleForX86_64Release
+extractApksFromBundleForX86Debug
+extractApksFromBundleForX86Release
+extractArm64DebugNativeDebugMetadata
+extractArm64DebugNativeSymbolTables
+extractArm64ReleaseNativeDebugMetadata
+extractArm64ReleaseNativeSymbolTables
+extractArm64ReleaseVersionControlInfo
+extractArmDebugNativeDebugMetadata
+extractArmDebugNativeSymbolTables
+extractArmReleaseNativeDebugMetadata
+extractArmReleaseNativeSymbolTables
+extractArmReleaseVersionControlInfo
+extractDeepLinksArm64Debug
+extractDeepLinksArm64Release
+extractDeepLinksArmDebug
+extractDeepLinksArmRelease
+extractDeepLinksUniversalDebug
+extractDeepLinksUniversalRelease
+extractDeepLinksX86_64Debug
+extractDeepLinksX86_64Release
+extractDeepLinksX86Debug
+extractDeepLinksX86Release
+extractProguardFiles
+extractUniversalDebugNativeDebugMetadata
+extractUniversalDebugNativeSymbolTables
+extractUniversalReleaseNativeDebugMetadata
+extractUniversalReleaseNativeSymbolTables
+extractUniversalReleaseVersionControlInfo
+extractX86_64DebugNativeDebugMetadata
+extractX86_64DebugNativeSymbolTables
+extractX86_64ReleaseNativeDebugMetadata
+extractX86_64ReleaseNativeSymbolTables
+extractX86_64ReleaseVersionControlInfo
+extractX86DebugNativeDebugMetadata
+extractX86DebugNativeSymbolTables
+extractX86ReleaseNativeDebugMetadata
+extractX86ReleaseNativeSymbolTables
+extractX86ReleaseVersionControlInfo
+generateArm64DebugAndroidTestAssets
+generateArm64DebugAndroidTestBuildConfig
+generateArm64DebugAndroidTestLintModel
+generateArm64DebugAndroidTestResources
+generateArm64DebugAndroidTestResValues
+generateArm64DebugAndroidTestSources
+generateArm64DebugAssets
+generateArm64DebugBuildConfig
+generateArm64DebugFeatureMetadata
+generateArm64DebugFeatureTransitiveDeps
+generateArm64DebugLintModel
+generateArm64DebugLintReportModel
+generateArm64DebugManifestClass
+generateArm64DebugResources
+generateArm64DebugResValues
+generateArm64DebugSources
+generateArm64DebugUnitTestAssets
+generateArm64DebugUnitTestLintModel
+generateArm64DebugUnitTestResources
+generateArm64DebugUnitTestSources
+generateArm64ReleaseAssets
+generateArm64ReleaseBuildConfig
+generateArm64ReleaseFeatureMetadata
+generateArm64ReleaseFeatureTransitiveDeps
+generateArm64ReleaseLintModel
+generateArm64ReleaseLintReportModel
+generateArm64ReleaseLintVitalReportModel
+generateArm64ReleaseManifestClass
+generateArm64ReleaseResources
+generateArm64ReleaseResValues
+generateArm64ReleaseSources
+generateArm64ReleaseUnitTestAssets
+generateArm64ReleaseUnitTestLintModel
+generateArm64ReleaseUnitTestResources
+generateArm64ReleaseUnitTestSources
+generateArmDebugAndroidTestAssets
+generateArmDebugAndroidTestBuildConfig
+generateArmDebugAndroidTestLintModel
+generateArmDebugAndroidTestResources
+generateArmDebugAndroidTestResValues
+generateArmDebugAndroidTestSources
+generateArmDebugAssets
+generateArmDebugBuildConfig
+generateArmDebugFeatureMetadata
+generateArmDebugFeatureTransitiveDeps
+generateArmDebugLintModel
+generateArmDebugLintReportModel
+generateArmDebugManifestClass
+generateArmDebugResources
+generateArmDebugResValues
+generateArmDebugSources
+generateArmDebugUnitTestAssets
+generateArmDebugUnitTestLintModel
+generateArmDebugUnitTestResources
+generateArmDebugUnitTestSources
+generateArmReleaseAssets
+generateArmReleaseBuildConfig
+generateArmReleaseFeatureMetadata
+generateArmReleaseFeatureTransitiveDeps
+generateArmReleaseLintModel
+generateArmReleaseLintReportModel
+generateArmReleaseLintVitalReportModel
+generateArmReleaseManifestClass
+generateArmReleaseResources
+generateArmReleaseResValues
+generateArmReleaseSources
+generateArmReleaseUnitTestAssets
+generateArmReleaseUnitTestLintModel
+generateArmReleaseUnitTestResources
+generateArmReleaseUnitTestSources
+generateUniversalDebugAndroidTestAssets
+generateUniversalDebugAndroidTestBuildConfig
+generateUniversalDebugAndroidTestLintModel
+generateUniversalDebugAndroidTestResources
+generateUniversalDebugAndroidTestResValues
+generateUniversalDebugAndroidTestSources
+generateUniversalDebugAssets
+generateUniversalDebugBuildConfig
+generateUniversalDebugFeatureMetadata
+generateUniversalDebugFeatureTransitiveDeps
+generateUniversalDebugLintModel
+generateUniversalDebugLintReportModel
+generateUniversalDebugManifestClass
+generateUniversalDebugResources
+generateUniversalDebugResValues
+generateUniversalDebugSources
+generateUniversalDebugUnitTestAssets
+generateUniversalDebugUnitTestLintModel
+generateUniversalDebugUnitTestResources
+generateUniversalDebugUnitTestSources
+generateUniversalReleaseAssets
+generateUniversalReleaseBuildConfig
+generateUniversalReleaseFeatureMetadata
+generateUniversalReleaseFeatureTransitiveDeps
+generateUniversalReleaseLintModel
+generateUniversalReleaseLintReportModel
+generateUniversalReleaseLintVitalReportModel
+generateUniversalReleaseManifestClass
+generateUniversalReleaseResources
+generateUniversalReleaseResValues
+generateUniversalReleaseSources
+generateUniversalReleaseUnitTestAssets
+generateUniversalReleaseUnitTestLintModel
+generateUniversalReleaseUnitTestResources
+generateUniversalReleaseUnitTestSources
+generateX86_64DebugAndroidTestAssets
+generateX86_64DebugAndroidTestBuildConfig
+generateX86_64DebugAndroidTestLintModel
+generateX86_64DebugAndroidTestResources
+generateX86_64DebugAndroidTestResValues
+generateX86_64DebugAndroidTestSources
+generateX86_64DebugAssets
+generateX86_64DebugBuildConfig
+generateX86_64DebugFeatureMetadata
+generateX86_64DebugFeatureTransitiveDeps
+generateX86_64DebugLintModel
+generateX86_64DebugLintReportModel
+generateX86_64DebugManifestClass
+generateX86_64DebugResources
+generateX86_64DebugResValues
+generateX86_64DebugSources
+generateX86_64DebugUnitTestAssets
+generateX86_64DebugUnitTestLintModel
+generateX86_64DebugUnitTestResources
+generateX86_64DebugUnitTestSources
+generateX86_64ReleaseAssets
+generateX86_64ReleaseBuildConfig
+generateX86_64ReleaseFeatureMetadata
+generateX86_64ReleaseFeatureTransitiveDeps
+generateX86_64ReleaseLintModel
+generateX86_64ReleaseLintReportModel
+generateX86_64ReleaseLintVitalReportModel
+generateX86_64ReleaseManifestClass
+generateX86_64ReleaseResources
+generateX86_64ReleaseResValues
+generateX86_64ReleaseSources
+generateX86_64ReleaseUnitTestAssets
+generateX86_64ReleaseUnitTestLintModel
+generateX86_64ReleaseUnitTestResources
+generateX86_64ReleaseUnitTestSources
+generateX86DebugAndroidTestAssets
+generateX86DebugAndroidTestBuildConfig
+generateX86DebugAndroidTestLintModel
+generateX86DebugAndroidTestResources
+generateX86DebugAndroidTestResValues
+generateX86DebugAndroidTestSources
+generateX86DebugAssets
+generateX86DebugBuildConfig
+generateX86DebugFeatureMetadata
+generateX86DebugFeatureTransitiveDeps
+generateX86DebugLintModel
+generateX86DebugLintReportModel
+generateX86DebugManifestClass
+generateX86DebugResources
+generateX86DebugResValues
+generateX86DebugSources
+generateX86DebugUnitTestAssets
+generateX86DebugUnitTestLintModel
+generateX86DebugUnitTestResources
+generateX86DebugUnitTestSources
+generateX86ReleaseAssets
+generateX86ReleaseBuildConfig
+generateX86ReleaseFeatureMetadata
+generateX86ReleaseFeatureTransitiveDeps
+generateX86ReleaseLintModel
+generateX86ReleaseLintReportModel
+generateX86ReleaseLintVitalReportModel
+generateX86ReleaseManifestClass
+generateX86ReleaseResources
+generateX86ReleaseResValues
+generateX86ReleaseSources
+generateX86ReleaseUnitTestAssets
+generateX86ReleaseUnitTestLintModel
+generateX86ReleaseUnitTestResources
+generateX86ReleaseUnitTestSources
+javaPreCompileArm64Debug
+javaPreCompileArm64DebugAndroidTest
+javaPreCompileArm64DebugUnitTest
+javaPreCompileArm64Release
+javaPreCompileArm64ReleaseUnitTest
+javaPreCompileArmDebug
+javaPreCompileArmDebugAndroidTest
+javaPreCompileArmDebugUnitTest
+javaPreCompileArmRelease
+javaPreCompileArmReleaseUnitTest
+javaPreCompileUniversalDebug
+javaPreCompileUniversalDebugAndroidTest
+javaPreCompileUniversalDebugUnitTest
+javaPreCompileUniversalRelease
+javaPreCompileUniversalReleaseUnitTest
+javaPreCompileX86_64Debug
+javaPreCompileX86_64DebugAndroidTest
+javaPreCompileX86_64DebugUnitTest
+javaPreCompileX86_64Release
+javaPreCompileX86_64ReleaseUnitTest
+javaPreCompileX86Debug
+javaPreCompileX86DebugAndroidTest
+javaPreCompileX86DebugUnitTest
+javaPreCompileX86Release
+javaPreCompileX86ReleaseUnitTest
+lintAnalyzeArm64Debug - Run lint analysis on the arm64Debug component
+lintAnalyzeArm64DebugAndroidTest - Run lint analysis on the arm64DebugAndroidTest component
+lintAnalyzeArm64DebugUnitTest - Run lint analysis on the arm64DebugUnitTest component
+lintAnalyzeArm64Release - Run lint analysis on the arm64Release component
+lintAnalyzeArm64ReleaseUnitTest - Run lint analysis on the arm64ReleaseUnitTest component
+lintAnalyzeArmDebug - Run lint analysis on the armDebug component
+lintAnalyzeArmDebugAndroidTest - Run lint analysis on the armDebugAndroidTest component
+lintAnalyzeArmDebugUnitTest - Run lint analysis on the armDebugUnitTest component
+lintAnalyzeArmRelease - Run lint analysis on the armRelease component
+lintAnalyzeArmReleaseUnitTest - Run lint analysis on the armReleaseUnitTest component
+lintAnalyzeUniversalDebug - Run lint analysis on the universalDebug component
+lintAnalyzeUniversalDebugAndroidTest - Run lint analysis on the universalDebugAndroidTest component
+lintAnalyzeUniversalDebugUnitTest - Run lint analysis on the universalDebugUnitTest component
+lintAnalyzeUniversalRelease - Run lint analysis on the universalRelease component
+lintAnalyzeUniversalReleaseUnitTest - Run lint analysis on the universalReleaseUnitTest component
+lintAnalyzeX86_64Debug - Run lint analysis on the x86_64Debug component
+lintAnalyzeX86_64DebugAndroidTest - Run lint analysis on the x86_64DebugAndroidTest component
+lintAnalyzeX86_64DebugUnitTest - Run lint analysis on the x86_64DebugUnitTest component
+lintAnalyzeX86_64Release - Run lint analysis on the x86_64Release component
+lintAnalyzeX86_64ReleaseUnitTest - Run lint analysis on the x86_64ReleaseUnitTest component
+lintAnalyzeX86Debug - Run lint analysis on the x86Debug component
+lintAnalyzeX86DebugAndroidTest - Run lint analysis on the x86DebugAndroidTest component
+lintAnalyzeX86DebugUnitTest - Run lint analysis on the x86DebugUnitTest component
+lintAnalyzeX86Release - Run lint analysis on the x86Release component
+lintAnalyzeX86ReleaseUnitTest - Run lint analysis on the x86ReleaseUnitTest component
+lintFixArm64Debug - Fix lint on the arm64Debug variant
+lintFixArm64Release - Fix lint on the arm64Release variant
+lintFixArmDebug - Fix lint on the armDebug variant
+lintFixArmRelease - Fix lint on the armRelease variant
+lintFixUniversalDebug - Fix lint on the universalDebug variant
+lintFixUniversalRelease - Fix lint on the universalRelease variant
+lintFixX86_64Debug - Fix lint on the x86_64Debug variant
+lintFixX86_64Release - Fix lint on the x86_64Release variant
+lintFixX86Debug - Fix lint on the x86Debug variant
+lintFixX86Release - Fix lint on the x86Release variant
+lintReportArm64Debug - Run lint on the arm64Debug variant
+lintReportArm64Release - Run lint on the arm64Release variant
+lintReportArmDebug - Run lint on the armDebug variant
+lintReportArmRelease - Run lint on the armRelease variant
+lintReportUniversalDebug - Run lint on the universalDebug variant
+lintReportUniversalRelease - Run lint on the universalRelease variant
+lintReportX86_64Debug - Run lint on the x86_64Debug variant
+lintReportX86_64Release - Run lint on the x86_64Release variant
+lintReportX86Debug - Run lint on the x86Debug variant
+lintReportX86Release - Run lint on the x86Release variant
+lintVitalAnalyzeArm64Release - Run lint analysis with only the fatal issues enabled 
+lintVitalAnalyzeArmRelease - Run lint analysis with only the fatal issues enabled 
+lintVitalAnalyzeUniversalRelease - Run lint analysis with only the fatal issues enabled 
+lintVitalAnalyzeX86_64Release - Run lint analysis with only the fatal issues enabled 
+lintVitalAnalyzeX86Release - Run lint analysis with only the fatal issues enabled 
+lintVitalReportArm64Release - Run lint with only the fatal issues enabled on the arm64Release variant
+lintVitalReportArmRelease - Run lint with only the fatal issues enabled on the armRelease variant
+lintVitalReportUniversalRelease - Run lint with only the fatal issues enabled on the universalRelease variant
+lintVitalReportX86_64Release - Run lint with only the fatal issues enabled on the x86_64Release variant
+lintVitalReportX86Release - Run lint with only the fatal issues enabled on the x86Release variant
+makeApkFromBundleForArm64Debug
+makeApkFromBundleForArm64Release
+makeApkFromBundleForArmDebug
+makeApkFromBundleForArmRelease
+makeApkFromBundleForUniversalDebug
+makeApkFromBundleForUniversalRelease
+makeApkFromBundleForX86_64Debug
+makeApkFromBundleForX86_64Release
+makeApkFromBundleForX86Debug
+makeApkFromBundleForX86Release
+mapArm64DebugAndroidTestSourceSetPaths
+mapArm64DebugSourceSetPaths
+mapArm64ReleaseSourceSetPaths
+mapArmDebugAndroidTestSourceSetPaths
+mapArmDebugSourceSetPaths
+mapArmReleaseSourceSetPaths
+mapUniversalDebugAndroidTestSourceSetPaths
+mapUniversalDebugSourceSetPaths
+mapUniversalReleaseSourceSetPaths
+mapX86_64DebugAndroidTestSourceSetPaths
+mapX86_64DebugSourceSetPaths
+mapX86_64ReleaseSourceSetPaths
+mapX86DebugAndroidTestSourceSetPaths
+mapX86DebugSourceSetPaths
+mapX86ReleaseSourceSetPaths
+mergeArm64DebugAndroidTestAssets
+mergeArm64DebugAndroidTestGeneratedProguardFiles
+mergeArm64DebugAndroidTestJavaResource
+mergeArm64DebugAndroidTestJniLibFolders
+mergeArm64DebugAndroidTestNativeLibs
+mergeArm64DebugAndroidTestResources
+mergeArm64DebugAndroidTestShaders
+mergeArm64DebugArtProfile
+mergeArm64DebugAssets
+mergeArm64DebugGeneratedProguardFiles
+mergeArm64DebugJavaResource
+mergeArm64DebugJniLibFolders
+mergeArm64DebugNativeDebugMetadata
+mergeArm64DebugNativeLibs
+mergeArm64DebugResources
+mergeArm64DebugShaders
+mergeArm64DebugStartupProfile
+mergeArm64ReleaseArtProfile
+mergeArm64ReleaseAssets
+mergeArm64ReleaseGeneratedProguardFiles
+mergeArm64ReleaseJavaResource
+mergeArm64ReleaseJniLibFolders
+mergeArm64ReleaseNativeDebugMetadata
+mergeArm64ReleaseNativeLibs
+mergeArm64ReleaseResources
+mergeArm64ReleaseShaders
+mergeArm64ReleaseStartupProfile
+mergeArmDebugAndroidTestAssets
+mergeArmDebugAndroidTestGeneratedProguardFiles
+mergeArmDebugAndroidTestJavaResource
+mergeArmDebugAndroidTestJniLibFolders
+mergeArmDebugAndroidTestNativeLibs
+mergeArmDebugAndroidTestResources
+mergeArmDebugAndroidTestShaders
+mergeArmDebugArtProfile
+mergeArmDebugAssets
+mergeArmDebugGeneratedProguardFiles
+mergeArmDebugJavaResource
+mergeArmDebugJniLibFolders
+mergeArmDebugNativeDebugMetadata
+mergeArmDebugNativeLibs
+mergeArmDebugResources
+mergeArmDebugShaders
+mergeArmDebugStartupProfile
+mergeArmReleaseArtProfile
+mergeArmReleaseAssets
+mergeArmReleaseGeneratedProguardFiles
+mergeArmReleaseJavaResource
+mergeArmReleaseJniLibFolders
+mergeArmReleaseNativeDebugMetadata
+mergeArmReleaseNativeLibs
+mergeArmReleaseResources
+mergeArmReleaseShaders
+mergeArmReleaseStartupProfile
+mergeExtDexArm64Debug
+mergeExtDexArm64DebugAndroidTest
+mergeExtDexArmDebug
+mergeExtDexArmDebugAndroidTest
+mergeExtDexUniversalDebug
+mergeExtDexUniversalDebugAndroidTest
+mergeExtDexX86_64Debug
+mergeExtDexX86_64DebugAndroidTest
+mergeExtDexX86Debug
+mergeExtDexX86DebugAndroidTest
+mergeLibDexArm64Debug
+mergeLibDexArm64DebugAndroidTest
+mergeLibDexArmDebug
+mergeLibDexArmDebugAndroidTest
+mergeLibDexUniversalDebug
+mergeLibDexUniversalDebugAndroidTest
+mergeLibDexX86_64Debug
+mergeLibDexX86_64DebugAndroidTest
+mergeLibDexX86Debug
+mergeLibDexX86DebugAndroidTest
+mergeProjectDexArm64Debug
+mergeProjectDexArm64DebugAndroidTest
+mergeProjectDexArmDebug
+mergeProjectDexArmDebugAndroidTest
+mergeProjectDexUniversalDebug
+mergeProjectDexUniversalDebugAndroidTest
+mergeProjectDexX86_64Debug
+mergeProjectDexX86_64DebugAndroidTest
+mergeProjectDexX86Debug
+mergeProjectDexX86DebugAndroidTest
+mergeUniversalDebugAndroidTestAssets
+mergeUniversalDebugAndroidTestGeneratedProguardFiles
+mergeUniversalDebugAndroidTestJavaResource
+mergeUniversalDebugAndroidTestJniLibFolders
+mergeUniversalDebugAndroidTestNativeLibs
+mergeUniversalDebugAndroidTestResources
+mergeUniversalDebugAndroidTestShaders
+mergeUniversalDebugArtProfile
+mergeUniversalDebugAssets
+mergeUniversalDebugGeneratedProguardFiles
+mergeUniversalDebugJavaResource
+mergeUniversalDebugJniLibFolders
+mergeUniversalDebugNativeDebugMetadata
+mergeUniversalDebugNativeLibs
+mergeUniversalDebugResources
+mergeUniversalDebugShaders
+mergeUniversalDebugStartupProfile
+mergeUniversalReleaseArtProfile
+mergeUniversalReleaseAssets
+mergeUniversalReleaseGeneratedProguardFiles
+mergeUniversalReleaseJavaResource
+mergeUniversalReleaseJniLibFolders
+mergeUniversalReleaseNativeDebugMetadata
+mergeUniversalReleaseNativeLibs
+mergeUniversalReleaseResources
+mergeUniversalReleaseShaders
+mergeUniversalReleaseStartupProfile
+mergeX86_64DebugAndroidTestAssets
+mergeX86_64DebugAndroidTestGeneratedProguardFiles
+mergeX86_64DebugAndroidTestJavaResource
+mergeX86_64DebugAndroidTestJniLibFolders
+mergeX86_64DebugAndroidTestNativeLibs
+mergeX86_64DebugAndroidTestResources
+mergeX86_64DebugAndroidTestShaders
+mergeX86_64DebugArtProfile
+mergeX86_64DebugAssets
+mergeX86_64DebugGeneratedProguardFiles
+mergeX86_64DebugJavaResource
+mergeX86_64DebugJniLibFolders
+mergeX86_64DebugNativeDebugMetadata
+mergeX86_64DebugNativeLibs
+mergeX86_64DebugResources
+mergeX86_64DebugShaders
+mergeX86_64DebugStartupProfile
+mergeX86_64ReleaseArtProfile
+mergeX86_64ReleaseAssets
+mergeX86_64ReleaseGeneratedProguardFiles
+mergeX86_64ReleaseJavaResource
+mergeX86_64ReleaseJniLibFolders
+mergeX86_64ReleaseNativeDebugMetadata
+mergeX86_64ReleaseNativeLibs
+mergeX86_64ReleaseResources
+mergeX86_64ReleaseShaders
+mergeX86_64ReleaseStartupProfile
+mergeX86DebugAndroidTestAssets
+mergeX86DebugAndroidTestGeneratedProguardFiles
+mergeX86DebugAndroidTestJavaResource
+mergeX86DebugAndroidTestJniLibFolders
+mergeX86DebugAndroidTestNativeLibs
+mergeX86DebugAndroidTestResources
+mergeX86DebugAndroidTestShaders
+mergeX86DebugArtProfile
+mergeX86DebugAssets
+mergeX86DebugGeneratedProguardFiles
+mergeX86DebugJavaResource
+mergeX86DebugJniLibFolders
+mergeX86DebugNativeDebugMetadata
+mergeX86DebugNativeLibs
+mergeX86DebugResources
+mergeX86DebugShaders
+mergeX86DebugStartupProfile
+mergeX86ReleaseArtProfile
+mergeX86ReleaseAssets
+mergeX86ReleaseGeneratedProguardFiles
+mergeX86ReleaseJavaResource
+mergeX86ReleaseJniLibFolders
+mergeX86ReleaseNativeDebugMetadata
+mergeX86ReleaseNativeLibs
+mergeX86ReleaseResources
+mergeX86ReleaseShaders
+mergeX86ReleaseStartupProfile
+minifyArm64ReleaseWithR8
+minifyArmReleaseWithR8
+minifyUniversalReleaseWithR8
+minifyX86_64ReleaseWithR8
+minifyX86ReleaseWithR8
+model - Displays the configuration model of project ':app'. [deprecated]
+optimizeArm64ReleaseResources
+optimizeArmReleaseResources
+optimizeUniversalReleaseResources
+optimizeX86_64ReleaseResources
+optimizeX86ReleaseResources
+packageArm64Debug
+packageArm64DebugAndroidTest
+packageArm64DebugBundle
+packageArm64DebugResources
+packageArm64DebugUniversalApk
+packageArm64Release
+packageArm64ReleaseBundle
+packageArm64ReleaseResources
+packageArm64ReleaseUniversalApk
+packageArmDebug
+packageArmDebugAndroidTest
+packageArmDebugBundle
+packageArmDebugResources
+packageArmDebugUniversalApk
+packageArmRelease
+packageArmReleaseBundle
+packageArmReleaseResources
+packageArmReleaseUniversalApk
+packageUniversalDebug
+packageUniversalDebugAndroidTest
+packageUniversalDebugBundle
+packageUniversalDebugResources
+packageUniversalDebugUniversalApk
+packageUniversalRelease
+packageUniversalReleaseBundle
+packageUniversalReleaseResources
+packageUniversalReleaseUniversalApk
+packageX86_64Debug
+packageX86_64DebugAndroidTest
+packageX86_64DebugBundle
+packageX86_64DebugResources
+packageX86_64DebugUniversalApk
+packageX86_64Release
+packageX86_64ReleaseBundle
+packageX86_64ReleaseResources
+packageX86_64ReleaseUniversalApk
+packageX86Debug
+packageX86DebugAndroidTest
+packageX86DebugBundle
+packageX86DebugResources
+packageX86DebugUniversalApk
+packageX86Release
+packageX86ReleaseBundle
+packageX86ReleaseResources
+packageX86ReleaseUniversalApk
+parseArm64DebugIntegrityConfig
+parseArm64DebugLocalResources
+parseArm64ReleaseIntegrityConfig
+parseArm64ReleaseLocalResources
+parseArmDebugIntegrityConfig
+parseArmDebugLocalResources
+parseArmReleaseIntegrityConfig
+parseArmReleaseLocalResources
+parseUniversalDebugIntegrityConfig
+parseUniversalDebugLocalResources
+parseUniversalReleaseIntegrityConfig
+parseUniversalReleaseLocalResources
+parseX86_64DebugIntegrityConfig
+parseX86_64DebugLocalResources
+parseX86_64ReleaseIntegrityConfig
+parseX86_64ReleaseLocalResources
+parseX86DebugIntegrityConfig
+parseX86DebugLocalResources
+parseX86ReleaseIntegrityConfig
+parseX86ReleaseLocalResources
+preArm64DebugAndroidTestBuild
+preArm64DebugBuild
+preArm64DebugUnitTestBuild
+preArm64ReleaseBuild
+preArm64ReleaseUnitTestBuild
+preArmDebugAndroidTestBuild
+preArmDebugBuild
+preArmDebugUnitTestBuild
+preArmReleaseBuild
+preArmReleaseUnitTestBuild
+preBuild
+prepareLintJarForPublish
+preUniversalDebugAndroidTestBuild
+preUniversalDebugBuild
+preUniversalDebugUnitTestBuild
+preUniversalReleaseBuild
+preUniversalReleaseUnitTestBuild
+preX86_64DebugAndroidTestBuild
+preX86_64DebugBuild
+preX86_64DebugUnitTestBuild
+preX86_64ReleaseBuild
+preX86_64ReleaseUnitTestBuild
+preX86DebugAndroidTestBuild
+preX86DebugBuild
+preX86DebugUnitTestBuild
+preX86ReleaseBuild
+preX86ReleaseUnitTestBuild
+processApplicationManifestArm64DebugForBundle
+processApplicationManifestArm64ReleaseForBundle
+processApplicationManifestArmDebugForBundle
+processApplicationManifestArmReleaseForBundle
+processApplicationManifestUniversalDebugForBundle
+processApplicationManifestUniversalReleaseForBundle
+processApplicationManifestX86_64DebugForBundle
+processApplicationManifestX86_64ReleaseForBundle
+processApplicationManifestX86DebugForBundle
+processApplicationManifestX86ReleaseForBundle
+processArm64DebugAndroidTestJavaRes
+processArm64DebugAndroidTestManifest
+processArm64DebugAndroidTestResources
+processArm64DebugJavaRes
+processArm64DebugMainManifest
+processArm64DebugManifest
+processArm64DebugManifestForPackage
+processArm64DebugResources
+processArm64DebugUnitTestJavaRes
+processArm64ReleaseJavaRes
+processArm64ReleaseMainManifest
+processArm64ReleaseManifest
+processArm64ReleaseManifestForPackage
+processArm64ReleaseResources
+processArm64ReleaseUnitTestJavaRes
+processArmDebugAndroidTestJavaRes
+processArmDebugAndroidTestManifest
+processArmDebugAndroidTestResources
+processArmDebugJavaRes
+processArmDebugMainManifest
+processArmDebugManifest
+processArmDebugManifestForPackage
+processArmDebugResources
+processArmDebugUnitTestJavaRes
+processArmReleaseJavaRes
+processArmReleaseMainManifest
+processArmReleaseManifest
+processArmReleaseManifestForPackage
+processArmReleaseResources
+processArmReleaseUnitTestJavaRes
+processManifestArm64DebugForFeature
+processManifestArm64ReleaseForFeature
+processManifestArmDebugForFeature
+processManifestArmReleaseForFeature
+processManifestUniversalDebugForFeature
+processManifestUniversalReleaseForFeature
+processManifestX86_64DebugForFeature
+processManifestX86_64ReleaseForFeature
+processManifestX86DebugForFeature
+processManifestX86ReleaseForFeature
+processUniversalDebugAndroidTestJavaRes
+processUniversalDebugAndroidTestManifest
+processUniversalDebugAndroidTestResources
+processUniversalDebugJavaRes
+processUniversalDebugMainManifest
+processUniversalDebugManifest
+processUniversalDebugManifestForPackage
+processUniversalDebugResources
+processUniversalDebugUnitTestJavaRes
+processUniversalReleaseJavaRes
+processUniversalReleaseMainManifest
+processUniversalReleaseManifest
+processUniversalReleaseManifestForPackage
+processUniversalReleaseResources
+processUniversalReleaseUnitTestJavaRes
+processX86_64DebugAndroidTestJavaRes
+processX86_64DebugAndroidTestManifest
+processX86_64DebugAndroidTestResources
+processX86_64DebugJavaRes
+processX86_64DebugMainManifest
+processX86_64DebugManifest
+processX86_64DebugManifestForPackage
+processX86_64DebugResources
+processX86_64DebugUnitTestJavaRes
+processX86_64ReleaseJavaRes
+processX86_64ReleaseMainManifest
+processX86_64ReleaseManifest
+processX86_64ReleaseManifestForPackage
+processX86_64ReleaseResources
+processX86_64ReleaseUnitTestJavaRes
+processX86DebugAndroidTestJavaRes
+processX86DebugAndroidTestManifest
+processX86DebugAndroidTestResources
+processX86DebugJavaRes
+processX86DebugMainManifest
+processX86DebugManifest
+processX86DebugManifestForPackage
+processX86DebugResources
+processX86DebugUnitTestJavaRes
+processX86ReleaseJavaRes
+processX86ReleaseMainManifest
+processX86ReleaseManifest
+processX86ReleaseManifestForPackage
+processX86ReleaseResources
+processX86ReleaseUnitTestJavaRes
+produceArm64DebugBundleIdeListingFile
+produceArm64ReleaseBundleIdeListingFile
+produceArmDebugBundleIdeListingFile
+produceArmReleaseBundleIdeListingFile
+produceUniversalDebugBundleIdeListingFile
+produceUniversalReleaseBundleIdeListingFile
+produceX86_64DebugBundleIdeListingFile
+produceX86_64ReleaseBundleIdeListingFile
+produceX86DebugBundleIdeListingFile
+produceX86ReleaseBundleIdeListingFile
+resolveConfigAttr
+sdkArm64ReleaseDependencyData
+sdkArmReleaseDependencyData
+sdkUniversalReleaseDependencyData
+sdkX86_64ReleaseDependencyData
+sdkX86ReleaseDependencyData
+signArm64DebugBundle
+signArm64ReleaseBundle
+signArmDebugBundle
+signArmReleaseBundle
+signingConfigWriterArm64Debug
+signingConfigWriterArm64DebugAndroidTest
+signingConfigWriterArm64Release
+signingConfigWriterArmDebug
+signingConfigWriterArmDebugAndroidTest
+signingConfigWriterArmRelease
+signingConfigWriterUniversalDebug
+signingConfigWriterUniversalDebugAndroidTest
+signingConfigWriterUniversalRelease
+signingConfigWriterX86_64Debug
+signingConfigWriterX86_64DebugAndroidTest
+signingConfigWriterX86_64Release
+signingConfigWriterX86Debug
+signingConfigWriterX86DebugAndroidTest
+signingConfigWriterX86Release
+signUniversalDebugBundle
+signUniversalReleaseBundle
+signX86_64DebugBundle
+signX86_64ReleaseBundle
+signX86DebugBundle
+signX86ReleaseBundle
+stripArm64DebugAndroidTestDebugSymbols
+stripArm64DebugDebugSymbols
+stripArm64ReleaseDebugSymbols
+stripArmDebugAndroidTestDebugSymbols
+stripArmDebugDebugSymbols
+stripArmReleaseDebugSymbols
+stripUniversalDebugAndroidTestDebugSymbols
+stripUniversalDebugDebugSymbols
+stripUniversalReleaseDebugSymbols
+stripX86_64DebugAndroidTestDebugSymbols
+stripX86_64DebugDebugSymbols
+stripX86_64ReleaseDebugSymbols
+stripX86DebugAndroidTestDebugSymbols
+stripX86DebugDebugSymbols
+stripX86ReleaseDebugSymbols
+updateLintBaselineArm64Debug - Update the lint baseline using the arm64Debug variant
+updateLintBaselineArm64Release - Update the lint baseline using the arm64Release variant
+updateLintBaselineArmDebug - Update the lint baseline using the armDebug variant
+updateLintBaselineArmRelease - Update the lint baseline using the armRelease variant
+updateLintBaselineUniversalDebug - Update the lint baseline using the universalDebug variant
+updateLintBaselineUniversalRelease - Update the lint baseline using the universalRelease variant
+updateLintBaselineX86_64Debug - Update the lint baseline using the x86_64Debug variant
+updateLintBaselineX86_64Release - Update the lint baseline using the x86_64Release variant
+updateLintBaselineX86Debug - Update the lint baseline using the x86Debug variant
+updateLintBaselineX86Release - Update the lint baseline using the x86Release variant
+validateSigningArm64Debug
+validateSigningArm64DebugAndroidTest
+validateSigningArm64Release
+validateSigningArmDebug
+validateSigningArmDebugAndroidTest
+validateSigningArmRelease
+validateSigningUniversalDebug
+validateSigningUniversalDebugAndroidTest
+validateSigningUniversalRelease
+validateSigningX86_64Debug
+validateSigningX86_64DebugAndroidTest
+validateSigningX86_64Release
+validateSigningX86Debug
+validateSigningX86DebugAndroidTest
+validateSigningX86Release
+writeArm64DebugAndroidTestSigningConfigVersions
+writeArm64DebugApplicationId
+writeArm64DebugAppMetadata
+writeArm64DebugModuleMetadata
+writeArm64DebugSigningConfigVersions
+writeArm64ReleaseApplicationId
+writeArm64ReleaseAppMetadata
+writeArm64ReleaseModuleMetadata
+writeArm64ReleaseSigningConfigVersions
+writeArmDebugAndroidTestSigningConfigVersions
+writeArmDebugApplicationId
+writeArmDebugAppMetadata
+writeArmDebugModuleMetadata
+writeArmDebugSigningConfigVersions
+writeArmReleaseApplicationId
+writeArmReleaseAppMetadata
+writeArmReleaseModuleMetadata
+writeArmReleaseSigningConfigVersions
+writeUniversalDebugAndroidTestSigningConfigVersions
+writeUniversalDebugApplicationId
+writeUniversalDebugAppMetadata
+writeUniversalDebugModuleMetadata
+writeUniversalDebugSigningConfigVersions
+writeUniversalReleaseApplicationId
+writeUniversalReleaseAppMetadata
+writeUniversalReleaseModuleMetadata
+writeUniversalReleaseSigningConfigVersions
+writeX86_64DebugAndroidTestSigningConfigVersions
+writeX86_64DebugApplicationId
+writeX86_64DebugAppMetadata
+writeX86_64DebugModuleMetadata
+writeX86_64DebugSigningConfigVersions
+writeX86_64ReleaseApplicationId
+writeX86_64ReleaseAppMetadata
+writeX86_64ReleaseModuleMetadata
+writeX86_64ReleaseSigningConfigVersions
+writeX86DebugAndroidTestSigningConfigVersions
+writeX86DebugApplicationId
+writeX86DebugAppMetadata
+writeX86DebugModuleMetadata
+writeX86DebugSigningConfigVersions
+writeX86ReleaseApplicationId
+writeX86ReleaseAppMetadata
+writeX86ReleaseModuleMetadata
+writeX86ReleaseSigningConfigVersions
+zipApksForArm64Debug
+zipApksForArm64Release
+zipApksForArmDebug
+zipApksForArmRelease
+zipApksForUniversalDebug
+zipApksForUniversalRelease
+zipApksForX86_64Debug
+zipApksForX86_64Release
+zipApksForX86Debug
+zipApksForX86Release
+
+Rules
+-----
+Pattern: clean<TaskName>: Cleans the output files of a task.
+Pattern: build<ConfigurationName>: Assembles the artifacts of a configuration.
+
+[Incubating] Problems report is available at: file:///C:/Users/pbess/Desktop/qr-studio-ultra-main/src-tauri/gen/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 3s
+5 actionable tasks: 1 executed, 4 up-to-date

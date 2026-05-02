@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { fade, fly, scale } from "svelte/transition";
+  import { backOut, cubicOut } from "svelte/easing";
   import { invoke } from "@tauri-apps/api/core";
+  import { settingsStore } from "$lib/settingsStore.svelte";
+  import { generateAiMagicDesign, getProviderLabel } from "$lib/aiService";
+  import Settings from "./Settings.svelte";
   import { Format, scan, cancel, requestPermissions } from "@tauri-apps/plugin-barcode-scanner";
   import { save } from "@tauri-apps/plugin-dialog";
 
@@ -14,9 +19,34 @@
     message: string;
   };
 
+  type StudioTemplate = {
+    id: string;
+    name: string;
+    createdAt: string;
+    kind?: "single" | "batch";
+    settings: Record<string, any>;
+  };
+
+  type HistoryEntry = {
+    id: string;
+    label: string;
+    dataType: string;
+    payload: string;
+    createdAt: string;
+    score: number;
+  };
+
+  type BatchResult = {
+    id: string;
+    label: string;
+    payload: string;
+    image: string;
+    score: number;
+  };
+
   // Data Types & Variables
   let dataType = "URL";
-  let qrData = "https://github.com/Cypher-Shadowbourne";
+  let qrData = "your text here";
   let wifiSsid = "";
   let wifiPass = "";
   
@@ -70,6 +100,123 @@
 
   let tiktokUser = "";
 
+  // ✨ AI Magic State
+  let aiMagicPrompt = "";
+  let aiMagicLoading = false;
+  let aiMagicForceCenterImage = true;
+  let aiMagicLastCenterImagePrompt = "";
+  let aiMagicActiveProvider = settingsStore.preferredAiProvider;
+  let showAiMagic = false;
+  let currentView = "studio"; // "studio" or "settings"
+  const aiExamples = [
+    "🌿 Emerald forest oracle, glowing runes, gold fireflies, soft teal mist, sacred botanical sigils",
+    "🌙 Moonlit witch garden, amethyst petals, silver fog, luminous crystal altar, enchanted night bloom",
+    "🦊 Cyberpunk spirit fox, holographic neon fur, violet aura, electric rain, chrome shrine reflections",
+    "💎 Luxury black marble temple, liquid gold veins, royal purple glow, celestial halo, premium mystic depth",
+    "🐉 Cosmic nebula dragon, teal stardust, ultraviolet wings, radiant eclipse ring, ancient astral symbols",
+    "🔥 Volcanic phoenix sigil, obsidian shards, molten amber glow, smoke-lit feathers, dramatic inferno aura"
+  ];
+
+  async function handleAiMagicGenerate(moreFlair = false) {
+    if (!aiMagicPrompt.trim()) return;
+    
+    let promptToSend = aiMagicPrompt;
+    if (moreFlair) {
+      promptToSend += " — more intense, more artistic, more over-the-top";
+    }
+    if (aiMagicForceCenterImage) {
+      promptToSend += " — FORCE a detailed, vivid, artistic center_image_prompt for a beautiful center image/logo. Never leave center_image_prompt null, empty, generic, or vague.";
+    }
+
+    aiMagicLoading = true;
+    try {
+      const res = await generateAiMagicDesign(
+        promptToSend,
+        settingsStore.preferredAiProvider,
+        settingsStore.aiApiKeys
+      );
+      aiMagicActiveProvider = res.provider_used ?? settingsStore.preferredAiProvider;
+      
+      // Apply Colors
+      fillType = "Linear";
+      color1 = res.gradient_start;
+      color2 = res.gradient_mid;
+      color3 = res.gradient_end;
+      useFourthStop = false;
+      
+      ringColor = res.ring_color;
+      const selectedRingStyle = chooseAiOverlayRingStyle(promptToSend, res.overall_mood);
+      enableFrame = true;
+      ringStyle = selectedRingStyle;
+      ringColorMode = selectedRingStyle === "solid" ? "solid" : "gradient";
+      ringGradientMode = "match-main";
+      ringUseFourthStop = useFourthStop;
+      transparentFrameBg = false;
+      matchTextStyle = true;
+      matchTextTopStyle = true;
+      aiMagicLastCenterImagePrompt = res.center_image_prompt || "";
+      if (aiMagicForceCenterImage && aiMagicLastCenterImagePrompt.trim()) {
+        logoBase64 = createAiCenterImage(aiMagicLastCenterImagePrompt, res.overall_mood, color1, color2, color3);
+        logoName = "AI Magic Center Image";
+        logoTrimmedWidth = 512;
+        logoTrimmedHeight = 512;
+        logoSizePercent = 24;
+        logoOpacityPercent = 100;
+        centerOverlayMode = "custom";
+        centerOverlayStyle = selectedRingStyle === "solid" ? "rounded" : selectedRingStyle;
+        centerOverlayColor = ringColor;
+        centerOverlayColor2 = color2;
+        centerOverlayColor3 = color3;
+        centerOverlayColor4 = color1;
+        centerOverlayColorMode = centerOverlayStyle === "solid" ? "solid" : "gradient";
+        centerOverlayGradientMode = "match-main";
+      }
+
+      // Apply Style mapping based on mood
+      const mood = res.overall_mood.toLowerCase();
+      if (mood.includes("cyberpunk") || mood.includes("neon") || mood.includes("futuristic") || mood.includes("vibrant")) {
+        mainShape = "circle";
+        bgShape = "rounded";
+        eyeShape = "circle";
+      } else if (mood.includes("luxurious") || mood.includes("elegant") || mood.includes("mystical")) {
+        mainShape = "rounded";
+        bgShape = "square";
+        eyeShape = "rounded";
+      } else if (mood.includes("playful") || mood.includes("chaotic")) {
+        mainShape = "rounded";
+        bgShape = "rounded";
+        eyeShape = "circle";
+      } else if (mood.includes("industrial") || mood.includes("dark")) {
+        mainShape = "square";
+        bgShape = "square";
+        eyeShape = "square";
+      }
+
+      // Apply Text
+      if (res.curved_text_top) {
+        enableFrame = true;
+        frameTextTop = res.curved_text_top;
+        frameTextTopMode = "curved";
+        frameTextTopColor = color1;
+      }
+      if (res.curved_text_bottom) {
+        enableFrame = true;
+        frameText = res.curved_text_bottom;
+        frameTextMode = "curved";
+        frameTextColor = color1;
+      }
+
+      showAiMagic = false;
+      showSaveToastMessage(`Applied ${res.overall_mood} design with ${toDisplayCase(selectedRingStyle)} overlay`, "success");
+      await tick();
+      runGeneration();
+    } catch (err: any) {
+      showSaveToastMessage(err.toString(), "error");
+    } finally {
+      aiMagicLoading = false;
+    }
+  }
+
   // Main & Background
   let bgShape = "square";
   let mainShape = "square";
@@ -83,8 +230,8 @@
 
   // Eyes
   let eyeShape = "square";
-  let eyeOut = "#7646E0";
-  let eyeIn =  "#A946E0";
+  let eyeOut = "#000000";
+  let eyeIn =  "#000000";
 
   // PRO Settings & Logo
   let enableFrame = false;
@@ -94,7 +241,7 @@
   let frameTextRadius = 350;
   let frameTextSpacing = 1;
   let frameTextSize = 44;
-  let frameTextColor = "#A946E0";
+  let frameTextColor = "#000000";
   let matchTextStyle = false;
   let transparentTextBg = false;
 
@@ -102,12 +249,12 @@
   let frameTextTopRadius = 350;
   let frameTextTopSpacing = 1;
   let frameTextTopSize = 44;
-  let frameTextTopColor = "#A946E0";
+  let frameTextTopColor = "#000000";
   let matchTextTopStyle = false;
   let transparentTextTopBg = false;
 
   let ringStyle = "solid";
-  let ringColor = "#A946E0";
+  let ringColor = "#000000";
   let ringColor2 = "#8b5e3c";
   let ringColor3 = "#e6a756";
   let ringColor4 = "#ffd166";
@@ -117,7 +264,7 @@
   let transparentFrameBg = false;
   let centerOverlayMode = "none";
   let centerOverlayStyle = "solid";
-  let centerOverlayColor = "#A946E0";
+  let centerOverlayColor = "#000000";
   let centerOverlayColor2 = "#8b5e3c";
   let centerOverlayColor3 = "#e6a756";
   let centerOverlayColor4 = "#ffd166";
@@ -130,7 +277,39 @@
 
   let generationTimer: ReturnType<typeof setTimeout> | null = null;
   const sanitizeShape = (shape: string, fallback = "square") =>
-    shape === "diamond" || shape === "octagon" ? fallback : shape;
+    shape === "circle" || shape === "rounded" || shape === "square" ? shape : fallback;
+  const sanitizeFillType = (value: string) =>
+    value === "Linear" || value === "Linear Gradient" ? "Linear" : "Solid";
+  const sanitizeColorMode = (value: string) =>
+    value?.toLowerCase() === "gradient" ? "gradient" : "solid";
+
+  function hashText(value: string) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function chooseAiOverlayRingStyle(prompt: string, mood: string) {
+    const text = `${prompt} ${mood}`.toLowerCase();
+    if (/(neon|cyber|electric|holographic|glow|laser)/.test(text)) return "neon";
+    if (/(luxury|luxurious|premium|gold|marble|elegant|royal)/.test(text)) return "double";
+    if (/(space|cosmic|nebula|aurora|galaxy|dream)/.test(text)) return "gradient";
+    if (/(candy|playful|bubble|confetti|dots|pop)/.test(text)) return "dotted";
+    if (/(fire|lava|volcanic|industrial|warning|signal)/.test(text)) return "dashed";
+    if (/(crystal|gem|diamond|sharp|prism)/.test(text)) return "diamond";
+    if (/(forest|organic|mystical|leaf|soft|calm)/.test(text)) return "rounded";
+    if (/(minimal|plain|clean|simple)/.test(text)) return "solid";
+
+    const styles = ["solid", "double", "dotted", "dashed", "rounded", "diamond", "gradient", "neon"];
+    return styles[hashText(text) % styles.length];
+  }
+
+  function hasAnyAiProviderKey() {
+    return Object.values(settingsStore.aiApiKeys).some((key) => key.trim());
+  }
+
   function debouncedRunGeneration() {
     if (generationTimer) clearTimeout(generationTimer);
     generationTimer = setTimeout(() => {
@@ -141,11 +320,41 @@
   let initialLoadDone = false;
   onMount(() => {
     initialLoadDone = true;
+    
+    const handleKeydown = (e: KeyboardEvent) => {
+      // CMD/CTRL + S to Save PNG
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (qrImagePng) quickSave("png");
+      }
+      // CMD/CTRL + G to Generate
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+        e.preventDefault();
+        manualGenerationRequested = true;
+        runGeneration();
+      }
+      // ESC to close panels or modals
+      if (e.key === 'Escape') {
+        showHistoryPanel = false;
+        showScanDecryptModal = false;
+        showCropModal = false;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
   });
 
   $: if (initialLoadDone && typeof runGeneration === 'function') {
       // Trigger update on any of these variables
       const _trigger = [
+        dataType, qrData, wifiSsid, wifiPass,
+        petName, microchipNum, ownerName, ownerPhone, ownerAddr,
+        vCardFirst, vCardLast, vCardOrg, vCardPhone, vCardEmail,
+        emailTo, emailSub, emailBody, smsPhone, smsMsg, phoneNum, geoLat, geoLng,
+        waPhone, waMsg, cryptoAddr, cryptoType, cryptoAmount, cryptoLabel, cryptoMessage,
+        eventTitle, eventStart, eventEnd, eventLoc, socialUser, socialPlatform,
+        zoomMeetingId, zoomPass, linkedinUser, ytHandle, tiktokUser,
         enableFrame, 
         frameText, frameTextMode, frameTextSize, frameTextColor, matchTextStyle, transparentTextBg,
         frameTextRadius, frameTextSpacing,
@@ -159,11 +368,14 @@
         centerOverlayUseFourthStop, centerOverlayGradientMode, centerOverlayColorMode,
         transparentFrameBg
       ];
-      debouncedRunGeneration();
+      if (buildFinalQrData().trim()) debouncedRunGeneration();
   }
   $: bgShape = sanitizeShape(bgShape, "square");
   $: mainShape = sanitizeShape(mainShape, "square");
   $: eyeShape = sanitizeShape(eyeShape, "square");
+  $: fillType = sanitizeFillType(fillType);
+  $: ringColorMode = sanitizeColorMode(ringColorMode);
+  $: centerOverlayColorMode = sanitizeColorMode(centerOverlayColorMode);
   let logoName = "";
   let logoBase64 = "";
   let logoTrimmedWidth = 200;
@@ -182,10 +394,92 @@
   let saveToastTone: "success" | "error" | "info" = "success";
   let saveToastTimer: ReturnType<typeof setTimeout> | null = null;
   let recentSaves: { label: string; timestamp: string }[] = [];
+  let savedTemplates: StudioTemplate[] = [];
+  let templateName = "";
+  let generationHistory: HistoryEntry[] = [];
+  let showHistoryPanel = false;
+  let batchInput = "";
+  let batchResults: BatchResult[] = [];
+  let batchBusy = false;
+  let batchProgress = 0;
+  let batchTotal = 0;
+  let manualGenerationRequested = false;
+  let currentScannability = { score: 0, label: "Waiting", className: "empty", notes: ["Add content to score scannability."] };
+  let scannabilityInput = "";
   let generatedPayload = "";
   let generatedLabel = "QR Code";
   let printTitle = "";
   let generatedAt = "";
+  let encryptPlaintext = "";
+  let encryptPassphrase = "";
+  let showEncryptPassphrase = false;
+  let encryptionAlgorithm = "chacha20-poly1305";
+  let encryptedPayload = "";
+  let encryptedForensicDate = "";
+  let decryptPayload = "";
+  let decryptPassphrase = "";
+  let showDecryptPassphrase = false;
+  let decryptedPlaintext = "";
+  let decryptedForensicDate = "";
+  let cryptoBusy = false;
+  let scanDecryptSuccessTimer: ReturnType<typeof setTimeout> | null = null;
+  let encryptStrength = { label: "Not set", className: "empty", percent: 0 };
+  $: encryptStrength = getPassphraseStrength(encryptPassphrase);
+  $: scannabilityInput = [
+    dataType,
+    qrData,
+    wifiSsid,
+    wifiPass,
+    petName,
+    microchipNum,
+    ownerName,
+    ownerPhone,
+    ownerAddr,
+    vCardFirst,
+    vCardLast,
+    vCardOrg,
+    vCardPhone,
+    vCardEmail,
+    emailTo,
+    emailSub,
+    emailBody,
+    smsPhone,
+    smsMsg,
+    phoneNum,
+    geoLat,
+    geoLng,
+    waPhone,
+    waMsg,
+    cryptoAddr,
+    cryptoType,
+    cryptoAmount,
+    cryptoLabel,
+    cryptoMessage,
+    walletName,
+    eventTitle,
+    eventStart,
+    eventEnd,
+    eventLoc,
+    socialPlatform,
+    linkedinUser,
+    ytHandle,
+    tiktokUser,
+    zoomMeetingId,
+    zoomPass,
+    color1,
+    color2,
+    color3,
+    color4,
+    useFourthStop,
+    bgColor,
+    fillType,
+    mainShape,
+    logoBase64,
+    logoSizePercent,
+    enableFrame,
+    transparentFrameBg
+  ].join("|");
+  $: currentScannability = getScannabilityScore(buildFinalQrData(), scannabilityInput);
   
   // Scanner & Modal State
   let isScanning = false; 
@@ -193,10 +487,21 @@
   let scannedFormat = "";
   let scannedKind = "";
   let scannedResultCanOpen = false;
+  let showScanDecryptModal = false;
+  let scanEncryptedPayload = "";
+  let scanDecryptPassphrase = "";
+  let showScanDecryptPassphrase = false;
+  let scanDecryptedPlaintext = "";
+  let scanDecryptedForensicDate = "";
+  let showScanDecryptSuccessBanner = false;
+  let scanDecryptError = "";
   let showDogTagWarning = false; 
   let savedWallets: SavedWallet[] = [];
   let activeColorTarget = "color1";
   let recentColors: string[] = [];
+  const templateStorageKey = "qr-studio-ultra.templates";
+  const historyStorageKey = "qr-studio-ultra.history";
+  $: currentScannability = getScannabilityScore(buildFinalQrData());
 
   // --- NEW: Interactive Crop State ---
   let showCropModal = false;
@@ -238,7 +543,6 @@
     { name: "Ultraviolet", c1: "#240b36", c2: "#6a1b75", c3: "#c31432" },
     { name: "Digital Aurora", c1: "#141e30", c2: "#243b55", c3: "#00c6ff" },
     { name: "Burnt Amber", c1: "#2c1b0f", c2: "#8b5e3c", c3: "#e6a756" },
-    { name: "Soft Sunset", c1: "#3a1c71", c2: "#d76d77", c3: "#ffaf7b" },
     { name: "Graphite", c1: "#101214", c2: "#232526", c3: "#414345" },
     { name: "Steel Fade", c1: "#1f2731", c2: "#485563", c3: "#7d8fa1" }
   ];
@@ -256,6 +560,8 @@
 
   onMount(() => {
     loadSavedWallets();
+    loadSavedTemplates();
+    loadGenerationHistory();
   });
 
   function applySolid(c: string) {
@@ -671,12 +977,120 @@
     saveToastTone = tone;
     showSaveToast = false;
     if (saveToastTimer) clearTimeout(saveToastTimer);
-    requestAnimationFrame(() => {
+    tick().then(() => {
       showSaveToast = true;
       saveToastTimer = setTimeout(() => {
         showSaveToast = false;
-      }, 2600);
+      }, 3500);
     });
+  }
+
+  function getErrorMessage(error: unknown) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  function colorWithAlpha(hex: string, alpha: number) {
+    const { r, g, b } = hexToRgbParts(hex);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  function chooseAiCenterGlyph(prompt: string, mood: string) {
+    const text = `${prompt} ${mood}`.toLowerCase();
+    if (/(moon|witch|night|lunar|silver)/.test(text)) return "☾";
+    if (/(forest|nature|leaf|botanical|emerald|garden)/.test(text)) return "✣";
+    if (/(luxury|gold|diamond|crystal|gem|marble)/.test(text)) return "◇";
+    if (/(fire|lava|phoenix|volcanic|inferno)/.test(text)) return "✹";
+    if (/(cyber|neon|holo|electric|future)/.test(text)) return "✦";
+    if (/(space|cosmic|nebula|astral|star)/.test(text)) return "✧";
+    return "✦";
+  }
+
+  function createAiCenterImage(prompt: string, mood: string, c1: string, c2: string, c3: string) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+
+    ctx.clearRect(0, 0, 512, 512);
+
+    const aura = ctx.createRadialGradient(256, 256, 20, 256, 256, 246);
+    aura.addColorStop(0, colorWithAlpha(c2, 0.98));
+    aura.addColorStop(0.42, colorWithAlpha(c1, 0.82));
+    aura.addColorStop(0.78, colorWithAlpha(c3, 0.38));
+    aura.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(256, 256, 246, 0, Math.PI * 2);
+    ctx.fill();
+
+    const core = ctx.createLinearGradient(92, 80, 420, 432);
+    core.addColorStop(0, c1);
+    core.addColorStop(0.52, c2);
+    core.addColorStop(1, c3);
+    ctx.save();
+    ctx.shadowBlur = 34;
+    ctx.shadowColor = colorWithAlpha(c2, 0.9);
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(256, 256, 178, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const highlight = ctx.createRadialGradient(190, 150, 8, 190, 150, 190);
+    highlight.addColorStop(0, "rgba(255, 255, 255, 0.72)");
+    highlight.addColorStop(0.4, colorWithAlpha(c3, 0.2));
+    highlight.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = highlight;
+    ctx.beginPath();
+    ctx.arc(210, 178, 190, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
+    ctx.lineWidth = 8;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = colorWithAlpha(c3, 0.85);
+    ctx.beginPath();
+    ctx.arc(256, 256, 184, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([10, 14]);
+    ctx.beginPath();
+    ctx.arc(256, 256, 148, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    const glyph = chooseAiCenterGlyph(prompt, mood);
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 190px Georgia, 'Times New Roman', serif";
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+    ctx.fillText(glyph, 256, 252);
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
+    for (let i = 0; i < 18; i += 1) {
+      const seed = hashText(`${prompt}-${i}`);
+      const angle = (seed % 628) / 100;
+      const radius = 105 + (seed % 112);
+      const x = 256 + Math.cos(angle) * radius;
+      const y = 256 + Math.sin(angle) * radius;
+      const size = 2 + (seed % 5);
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    return canvas.toDataURL("image/png");
   }
 
   function rememberRecentSave(label: string) {
@@ -833,8 +1247,636 @@
     showSaveToastMessage("Wallet profile removed.", "info");
   }
 
+  function getStyleTemplateSnapshot(options: { includeBatch?: boolean } = {}) {
+    const snapshot: Record<string, any> = {
+      dataType, qrData, wifiSsid, wifiPass,
+      petName, microchipNum, ownerName, ownerPhone, ownerAddr,
+      vCardFirst, vCardLast, vCardOrg, vCardPhone, vCardEmail,
+      emailTo, emailSub, emailBody, smsPhone, smsMsg, phoneNum, geoLat, geoLng,
+      waPhone, waMsg, cryptoAddr, cryptoType, cryptoAmount, cryptoLabel, cryptoMessage,
+      walletName, eventTitle, eventStart, eventEnd, eventLoc, socialUser, socialPlatform,
+      zoomMeetingId, zoomPass, linkedinUser, ytHandle, tiktokUser,
+      bgShape, mainShape, fillType, color1, color2, color3, color4, useFourthStop, bgColor,
+      eyeShape, eyeOut, eyeIn, enableFrame, frameText, frameTextTop, frameTextMode,
+      frameTextTopMode, frameTextRadius, frameTextTopRadius, frameTextSpacing,
+      frameTextTopSpacing, frameTextSize, frameTextTopSize, frameTextColor,
+      frameTextTopColor, matchTextStyle, matchTextTopStyle, transparentTextBg,
+      transparentTextTopBg, ringStyle, ringColor, ringColor2, ringColor3, ringColor4,
+      ringUseFourthStop, ringGradientMode, ringColorMode, transparentFrameBg,
+      centerOverlayMode, centerOverlayStyle, centerOverlayColor, centerOverlayColor2,
+      centerOverlayColor3, centerOverlayColor4, centerOverlayUseFourthStop,
+      centerOverlayGradientMode, centerOverlayColorMode, logoName, logoBase64,
+      logoTrimmedWidth, logoTrimmedHeight, logoSizePercent, logoOpacityPercent
+    };
+
+    if (options.includeBatch) {
+      snapshot.batchInput = batchInput;
+    }
+
+    return snapshot;
+  }
+
+  function applyStyleTemplate(settings: Record<string, any> | undefined) {
+    console.log("applyStyleTemplate called with settings:", settings);
+    if (!settings || typeof settings !== "object") {
+      showSaveToastMessage("This template could not be loaded.", "error");
+      return false;
+    }
+
+    if (settings.batchInput) {
+      batchInput = settings.batchInput;
+    } else {
+      batchInput = "";
+    }
+    batchResults = [];
+
+    dataType = settings.dataType ?? dataType;
+    qrData = settings.qrData ?? qrData;
+    wifiSsid = settings.wifiSsid ?? wifiSsid;
+    wifiPass = settings.wifiPass ?? wifiPass;
+    petName = settings.petName ?? petName;
+    microchipNum = settings.microchipNum ?? microchipNum;
+    ownerName = settings.ownerName ?? ownerName;
+    ownerPhone = settings.ownerPhone ?? ownerPhone;
+    ownerAddr = settings.ownerAddr ?? ownerAddr;
+    vCardFirst = settings.vCardFirst ?? vCardFirst;
+    vCardLast = settings.vCardLast ?? vCardLast;
+    vCardOrg = settings.vCardOrg ?? vCardOrg;
+    vCardPhone = settings.vCardPhone ?? vCardPhone;
+    vCardEmail = settings.vCardEmail ?? vCardEmail;
+    emailTo = settings.emailTo ?? emailTo;
+    emailSub = settings.emailSub ?? emailSub;
+    emailBody = settings.emailBody ?? emailBody;
+    smsPhone = settings.smsPhone ?? smsPhone;
+    smsMsg = settings.smsMsg ?? smsMsg;
+    phoneNum = settings.phoneNum ?? phoneNum;
+    geoLat = settings.geoLat ?? geoLat;
+    geoLng = settings.geoLng ?? geoLng;
+    waPhone = settings.waPhone ?? waPhone;
+    waMsg = settings.waMsg ?? waMsg;
+    cryptoAddr = settings.cryptoAddr ?? cryptoAddr;
+    cryptoType = settings.cryptoType ?? cryptoType;
+    cryptoAmount = settings.cryptoAmount ?? cryptoAmount;
+    cryptoLabel = settings.cryptoLabel ?? cryptoLabel;
+    cryptoMessage = settings.cryptoMessage ?? cryptoMessage;
+    walletName = settings.walletName ?? walletName;
+    eventTitle = settings.eventTitle ?? eventTitle;
+    eventStart = settings.eventStart ?? eventStart;
+    eventEnd = settings.eventEnd ?? eventEnd;
+    eventLoc = settings.eventLoc ?? eventLoc;
+    socialUser = settings.socialUser ?? socialUser;
+    socialPlatform = settings.socialPlatform ?? socialPlatform;
+    zoomMeetingId = settings.zoomMeetingId ?? zoomMeetingId;
+    zoomPass = settings.zoomPass ?? zoomPass;
+    linkedinUser = settings.linkedinUser ?? linkedinUser;
+    ytHandle = settings.ytHandle ?? ytHandle;
+    tiktokUser = settings.tiktokUser ?? tiktokUser;
+    bgShape = settings.bgShape ?? bgShape;
+    mainShape = settings.mainShape ?? mainShape;
+    fillType = settings.fillType ?? fillType;
+    color1 = settings.color1 ?? color1;
+    color2 = settings.color2 ?? color2;
+    color3 = settings.color3 ?? color3;
+    color4 = settings.color4 ?? color4;
+    useFourthStop = settings.useFourthStop ?? useFourthStop;
+    bgColor = settings.bgColor ?? bgColor;
+    eyeShape = settings.eyeShape ?? eyeShape;
+    eyeOut = settings.eyeOut ?? eyeOut;
+    eyeIn = settings.eyeIn ?? eyeIn;
+    enableFrame = settings.enableFrame ?? enableFrame;
+    frameText = settings.frameText ?? frameText;
+    frameTextTop = settings.frameTextTop ?? frameTextTop;
+    frameTextMode = settings.frameTextMode ?? frameTextMode;
+    frameTextTopMode = settings.frameTextTopMode ?? frameTextTopMode;
+    frameTextRadius = settings.frameTextRadius ?? frameTextRadius;
+    frameTextTopRadius = settings.frameTextTopRadius ?? frameTextTopRadius;
+    frameTextSpacing = settings.frameTextSpacing ?? frameTextSpacing;
+    frameTextTopSpacing = settings.frameTextTopSpacing ?? frameTextTopSpacing;
+    frameTextSize = settings.frameTextSize ?? frameTextSize;
+    frameTextTopSize = settings.frameTextTopSize ?? frameTextTopSize;
+    frameTextColor = settings.frameTextColor ?? frameTextColor;
+    frameTextTopColor = settings.frameTextTopColor ?? frameTextTopColor;
+    matchTextStyle = settings.matchTextStyle ?? matchTextStyle;
+    matchTextTopStyle = settings.matchTextTopStyle ?? matchTextTopStyle;
+    transparentTextBg = settings.transparentTextBg ?? transparentTextBg;
+    transparentTextTopBg = settings.transparentTextTopBg ?? transparentTextTopBg;
+    ringStyle = settings.ringStyle ?? ringStyle;
+    ringColor = settings.ringColor ?? ringColor;
+    ringColor2 = settings.ringColor2 ?? ringColor2;
+    ringColor3 = settings.ringColor3 ?? ringColor3;
+    ringColor4 = settings.ringColor4 ?? ringColor4;
+    ringUseFourthStop = settings.ringUseFourthStop ?? ringUseFourthStop;
+    ringGradientMode = settings.ringGradientMode ?? ringGradientMode;
+    ringColorMode = settings.ringColorMode ?? ringColorMode;
+    transparentFrameBg = settings.transparentFrameBg ?? transparentFrameBg;
+    centerOverlayMode = settings.centerOverlayMode ?? centerOverlayMode;
+    centerOverlayStyle = settings.centerOverlayStyle ?? centerOverlayStyle;
+    centerOverlayColor = settings.centerOverlayColor ?? centerOverlayColor;
+    centerOverlayColor2 = settings.centerOverlayColor2 ?? centerOverlayColor2;
+    centerOverlayColor3 = settings.centerOverlayColor3 ?? centerOverlayColor3;
+    centerOverlayColor4 = settings.centerOverlayColor4 ?? centerOverlayColor4;
+    centerOverlayUseFourthStop = settings.centerOverlayUseFourthStop ?? centerOverlayUseFourthStop;
+    centerOverlayGradientMode = settings.centerOverlayGradientMode ?? centerOverlayGradientMode;
+    centerOverlayColorMode = settings.centerOverlayColorMode ?? centerOverlayColorMode;
+    logoName = settings.logoName ?? logoName;
+    logoBase64 = settings.logoBase64 ?? logoBase64;
+    logoTrimmedWidth = settings.logoTrimmedWidth ?? logoTrimmedWidth;
+    logoTrimmedHeight = settings.logoTrimmedHeight ?? logoTrimmedHeight;
+    logoSizePercent = settings.logoSizePercent ?? logoSizePercent;
+    logoOpacityPercent = settings.logoOpacityPercent ?? logoOpacityPercent;
+    if (typeof settings.batchInput === "string") {
+      batchInput = settings.batchInput;
+      batchResults = [];
+    }
+    return true;
+  }
+
+  function loadSavedTemplates() {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(templateStorageKey);
+      savedTemplates = raw ? JSON.parse(raw) : [];
+    } catch {
+      savedTemplates = [];
+    }
+  }
+
+  function persistSavedTemplates() {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(templateStorageKey, JSON.stringify(savedTemplates));
+  }
+
+  function getTemplateBatchLines(template: StudioTemplate) {
+    const savedBatchInput = typeof template.settings?.batchInput === "string" ? template.settings.batchInput : "";
+    return savedBatchInput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 50);
+  }
+
+  function saveTemplate(kind: "single" | "batch") {
+    console.log("saveTemplate called, kind:", kind);
+    if (kind === "batch" && !getBatchLines().length) {
+      showSaveToastMessage("Add one batch payload per line before saving a batch template.", "error");
+      return;
+    }
+
+    const fallbackName = kind === "batch" ? `Batch ${getBatchLines().length} items` : `${fillType} ${mainShape} template`;
+    const name = (templateName.trim() || fallbackName).slice(0, 48);
+    const template: StudioTemplate = {
+      id: `${Date.now()}`,
+      name,
+      kind,
+      createdAt: new Date().toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" }),
+      settings: getStyleTemplateSnapshot({ includeBatch: kind === "batch" })
+    };
+    const nextTemplates = [template, ...savedTemplates.filter((item) => item.name !== name)].slice(0, 12);
+
+    try {
+      savedTemplates = nextTemplates;
+      persistSavedTemplates();
+      templateName = "";
+      showSaveToastMessage(`${kind === "batch" ? "Batch template" : "Template"} saved: ${name}.`, "success");
+    } catch {
+      const slimTemplate: StudioTemplate = {
+        ...template,
+        settings: { ...template.settings, logoBase64: "", logoName: "" }
+      };
+      try {
+        savedTemplates = [slimTemplate, ...savedTemplates.filter((item) => item.name !== name)].slice(0, 12);
+        persistSavedTemplates();
+        templateName = "";
+        showSaveToastMessage(`${kind === "batch" ? "Batch template" : "Template"} saved without the center logo because storage is full.`, "info");
+      } catch {
+        savedTemplates = savedTemplates.filter((item) => item.id !== template.id);
+        showSaveToastMessage("Template could not be saved because browser storage is full.", "error");
+      }
+    }
+  }
+
+  function saveCurrentTemplate() {
+    saveTemplate("single");
+  }
+
+  function saveCurrentBatchTemplate() {
+    saveTemplate("batch");
+  }
+
+  async function loadTemplate(template: StudioTemplate) {
+    console.log("loadTemplate called:", template.name, "kind:", template.kind);
+    const loaded = applyStyleTemplate(template.settings);
+    if (!loaded) return;
+
+    // Ensure batchInput is set if it exists in settings
+    if (template.settings?.batchInput) {
+      batchInput = template.settings.batchInput;
+    }
+
+    const isBatchTemplate = template.kind === "batch" || getTemplateBatchLines(template).length > 0;
+
+    if (generationTimer) {
+      clearTimeout(generationTimer);
+      generationTimer = null;
+    }
+
+    await tick();
+    if (isBatchTemplate) {
+      await generateBatch();
+    } else if (buildFinalQrData().trim()) {
+      runGeneration();
+    }
+    showSaveToastMessage(`Template loaded: ${template.name}.`, "info");
+  }
+
+  function deleteTemplate(id: string) {
+    console.log("deleteTemplate called, id:", id);
+    savedTemplates = savedTemplates.filter((item) => item.id !== id);
+    persistSavedTemplates();
+    showSaveToastMessage("Template removed.", "info");
+  }
+
+  function loadGenerationHistory() {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(historyStorageKey);
+      generationHistory = raw ? JSON.parse(raw) : [];
+    } catch {
+      generationHistory = [];
+    }
+  }
+
+  function persistGenerationHistory() {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(historyStorageKey, JSON.stringify(generationHistory));
+  }
+
+  function rememberGeneration(payload: string, label: string) {
+    if (!payload.trim()) return;
+    const score = getScannabilityScore(payload).score;
+    const entry: HistoryEntry = {
+      id: `${Date.now()}`,
+      label: label.slice(0, 64),
+      dataType,
+      payload,
+      score,
+      createdAt: new Date().toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    };
+    generationHistory = [entry, ...generationHistory.filter((item) => item.payload !== payload)].slice(0, 20);
+    persistGenerationHistory();
+  }
+
+  function loadHistoryEntry(entry: HistoryEntry) {
+    dataType = "Text";
+    qrData = entry.payload;
+    showSaveToastMessage(`Loaded history item: ${entry.label}.`, "info");
+    manualGenerationRequested = true;
+    runGeneration();
+  }
+
+  function clearHistory() {
+    generationHistory = [];
+    persistGenerationHistory();
+    showSaveToastMessage("History cleared.", "info");
+  }
+
+  function hexToRgbParts(value: string) {
+    const clean = value.trim().replace("#", "");
+    const expanded = clean.length === 3 ? clean.split("").map((ch) => ch + ch).join("") : clean;
+    if (!/^[0-9a-f]{6}$/i.test(expanded)) return { r: 0, g: 0, b: 0 };
+    return {
+      r: parseInt(expanded.slice(0, 2), 16),
+      g: parseInt(expanded.slice(2, 4), 16),
+      b: parseInt(expanded.slice(4, 6), 16)
+    };
+  }
+
+  function relativeLuminance(hex: string) {
+    const { r, g, b } = hexToRgbParts(hex);
+    const channel = (n: number) => {
+      const c = n / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  }
+
+  function contrastRatio(foreground: string, background: string) {
+    const fg = relativeLuminance(foreground);
+    const bg = relativeLuminance(background);
+    const light = Math.max(fg, bg);
+    const dark = Math.min(fg, bg);
+    return (light + 0.05) / (dark + 0.05);
+  }
+
+  function getScannabilityScore(payload: string, _trigger?: string) {
+    const notes: string[] = [];
+    const trimmed = payload.trim();
+    if (!trimmed) return { score: 0, label: "Waiting", className: "empty", notes: ["Add content to score scannability."] };
+
+    let score = 100;
+    if (trimmed.length > 120) { score -= 8; notes.push("Payload is getting dense."); }
+    if (trimmed.length > 300) { score -= 14; notes.push("Long payload may need larger print size."); }
+    if (trimmed.length > 700) { score -= 18; notes.push("Very long payload reduces scan margin."); }
+
+    const foregroundColors = [color1];
+    if (fillType !== "Solid") {
+      foregroundColors.push(color2, color3);
+      if (useFourthStop) foregroundColors.push(color4);
+    }
+    const contrast = Math.min(...foregroundColors.map((fg) => contrastRatio(fg, bgColor)));
+    if (contrast < 3) { score -= 28; notes.push("Low foreground/background contrast."); }
+    else if (contrast < 4.5) { score -= 14; notes.push("Contrast is usable but a little tight."); }
+
+    if (logoBase64 && logoSizePercent > 24) { score -= 10; notes.push("Center logo is above the safest size."); }
+    if (logoBase64 && logoSizePercent > 30) { score -= 14; notes.push("Large logo may block data modules."); }
+    if (enableFrame && transparentFrameBg) { score -= 6; notes.push("Transparent frame background depends on the surface behind it."); }
+    if (mainShape !== "square") { score -= 4; notes.push("Styled modules are slightly harder to scan than square modules."); }
+    if (fillType !== "Solid") { score -= 5; notes.push("Gradients can reduce module contrast on some scanners."); }
+
+    score = Math.max(10, Math.min(100, Math.round(score)));
+    if (!notes.length) notes.push("Strong contrast and layout for scanning.");
+    if (score >= 86) return { score, label: "Excellent", className: "strong", notes };
+    if (score >= 70) return { score, label: "Good", className: "good", notes };
+    if (score >= 52) return { score, label: "Caution", className: "warning", notes };
+    return { score, label: "Risky", className: "danger", notes };
+  }
+
+  function getBatchLines() {
+    return batchInput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 50);
+  }
+
+  function loadImageSource(src: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => {
+        console.error("loadImageSource error for src:", src.slice(0, 100) + "...");
+        reject(new Error("Generated batch image could not be loaded."));
+      };
+      img.src = src;
+    });
+  }
+
+  function drawCenteredLogoOverlay(c: CanvasRenderingContext2D, centerX: number, centerY: number, renderedQrSize: number) {
+    drawGlobalCenterOverlay(c, centerX, centerY, renderedQrSize);
+  }
+
+  function drawBatchFrameText(c: CanvasRenderingContext2D, text: string, isTop: boolean, cx = 400, cy = 400) {
+    drawFrameText(c, text, isTop, cx, cy);
+  }
+
+  async function renderBatchImage(payload: string) {
+    console.log("renderBatchImage for payload:", payload);
+    const options = buildQrRenderOptions(payload);
+    console.log("Render options built:", options);
+    const baseImage = await invoke<string>("generate_ultra_qr", {
+      options
+    });
+    console.log("Backend generated image, length:", baseImage.length);
+    const img = await loadImageSource(baseImage);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Batch canvas context could not be created.");
+
+    if (enableFrame) {
+      canvas.width = 800;
+      canvas.height = 800;
+      ctx.save();
+      drawShapePath(ctx, bgShape, 400, 400, 800);
+      ctx.clip();
+      if (!transparentFrameBg) {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, 800, 800);
+      }
+      drawRingDecoration(
+        ctx,
+        ringStyle,
+        bgShape,
+        400,
+        400,
+        700,
+        ringColor,
+        getRingPalette(),
+        ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient"
+      );
+
+      let qrSize = 440;
+      if (bgShape === "diamond") qrSize = 340;
+      else if (bgShape === "octagon") qrSize = 400;
+      else if (bgShape === "rounded") qrSize = 460;
+      else if (bgShape === "square") qrSize = 480;
+      const qrOffset = (800 - qrSize) / 2;
+
+      ctx.save();
+      drawShapePath(ctx, bgShape, 400, 400, 660);
+      ctx.clip();
+      ctx.drawImage(img, qrOffset, qrOffset, qrSize, qrSize);
+      drawCenteredLogoOverlay(ctx, 400, 400, qrSize);
+      ctx.restore();
+
+      drawBatchFrameText(ctx, frameTextTop, true);
+      drawBatchFrameText(ctx, frameText, false);
+      ctx.restore();
+    } else {
+      canvas.width = 600;
+      canvas.height = 600;
+      ctx.save();
+      drawShapePath(ctx, bgShape, 300, 300, 600);
+      ctx.clip();
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, 600, 600);
+
+      let qrSize = 600;
+      if (bgShape === "circle") qrSize = 400;
+      else if (bgShape === "rounded") qrSize = 580;
+      else if (bgShape === "diamond") qrSize = 280;
+      else if (bgShape === "octagon") qrSize = 480;
+      const qrOffset = (600 - qrSize) / 2;
+
+      ctx.drawImage(img, qrOffset, qrOffset, qrSize, qrSize);
+      drawCenteredLogoOverlay(ctx, 300, 300, qrSize);
+      ctx.restore();
+    }
+
+    return canvas.toDataURL("image/png");
+  }
+
+  async function generateBatch() {
+    console.log("generateBatch called");
+    const lines = getBatchLines();
+    console.log("Batch lines:", lines);
+    if (!lines.length) {
+      showSaveToastMessage("Add one batch payload per line.", "error");
+      return;
+    }
+
+    batchBusy = true;
+    batchResults = [];
+    batchProgress = 0;
+    batchTotal = lines.length;
+    try {
+      const results: BatchResult[] = [];
+      for (const [index, payload] of lines.entries()) {
+        console.log(`Rendering batch item ${index + 1}/${lines.length}: ${payload}`);
+        const image = await renderBatchImage(payload);
+        results.push({
+          id: `${Date.now()}-${index}`,
+          label: `Batch ${index + 1}`,
+          payload,
+          image,
+          score: getScannabilityScore(payload).score
+        });
+        batchProgress = index + 1;
+      }
+      batchResults = results;
+      console.log("Batch results generated:", batchResults.length);
+      showSaveToastMessage(`Generated ${results.length} batch QR codes.`, "success");
+    } catch (e) {
+      console.error("Batch generation failed:", e);
+      showSaveToastMessage("Batch generation failed: " + e, "error");
+    } finally {
+      batchBusy = false;
+      batchProgress = 0;
+      batchTotal = 0;
+    }
+  }
+
+  function loadBatchResult(result: BatchResult) {
+    console.log("loadBatchResult called for:", result.label);
+    const payload = result.payload.trim();
+    const kind = classifyScan(payload, Format.QRCode);
+    
+    // Default fallback
+    qrData = payload;
+
+    if (kind === "Link") {
+      dataType = "URL";
+    } else if (kind === "WiFi") {
+      dataType = "WiFi";
+      const ssidMatch = payload.match(/S:([^;]+)/i);
+      const passMatch = payload.match(/P:([^;]+)/i);
+      if (ssidMatch) wifiSsid = ssidMatch[1];
+      if (passMatch) wifiPass = passMatch[1];
+    } else if (kind === "Contact") {
+      dataType = "vCard";
+      const fnMatch = payload.match(/FN:([^\n]+)/i);
+      const orgMatch = payload.match(/ORG:([^\n]+)/i);
+      const telMatch = payload.match(/TEL:([^\n]+)/i);
+      const emailMatch = payload.match(/EMAIL:([^\n]+)/i);
+      if (fnMatch) {
+        const parts = fnMatch[1].split(" ");
+        vCardFirst = parts[0] || "";
+        vCardLast = parts.slice(1).join(" ") || "";
+      }
+      if (orgMatch) vCardOrg = orgMatch[1];
+      if (telMatch) vCardPhone = telMatch[1];
+      if (emailMatch) vCardEmail = emailMatch[1];
+    } else if (kind === "Event") {
+      dataType = "Event";
+      const sumMatch = payload.match(/SUMMARY:([^\n]+)/i);
+      const locMatch = payload.match(/LOCATION:([^\n]+)/i);
+      if (sumMatch) eventTitle = sumMatch[1];
+      if (locMatch) eventLoc = locMatch[1];
+    } else if (payload.startsWith("mailto:")) {
+      dataType = "Email";
+      const to = payload.split(":")[1]?.split("?")[0] || "";
+      emailTo = to;
+    } else if (payload.startsWith("tel:")) {
+      dataType = "Phone";
+      phoneNum = payload.split(":")[1] || "";
+    } else if (payload.startsWith("smsto:")) {
+      dataType = "SMS";
+      const parts = payload.split(":");
+      smsPhone = parts[1] || "";
+      smsMsg = parts.slice(2).join(":") || "";
+    } else if (payload.startsWith("geo:")) {
+      dataType = "Geo";
+      const coords = payload.split(":")[1]?.split(",") || [];
+      geoLat = coords[0] || "";
+      geoLng = coords[1] || "";
+    } else if (kind === "Crypto Wallet") {
+      dataType = "Crypto";
+      const parts = payload.split(":");
+      cryptoType = parts[0] || "bitcoin";
+      cryptoAddr = parts[1]?.split("?")[0] || "";
+    } else {
+      dataType = "Text";
+    }
+
+    manualGenerationRequested = true;
+    runGeneration();
+    showSaveToastMessage(`Loaded ${result.label} into Studio.`, "info");
+  }
+
+  function strip_data_url_prefix(b64: string) {
+    if (!b64) return "";
+    const parts = b64.split(",");
+    return parts.length > 1 ? parts[1] : parts[0];
+  }
+
+  function clearBatchResults() {
+    batchResults = [];
+    showSaveToastMessage("Batch results cleared.", "info");
+  }
+
+  async function saveBatchResult(result: BatchResult) {
+    console.log("saveBatchResult called for:", result.label);
+    try {
+      const isMobile = isNativeMobileDevice();
+      const b64Data = result.image; // Keep full data URL for invoke
+      
+      if (isMobile) {
+        const msg = await invoke<{ message: string }>("save_to_device", { b64: b64Data, format: "png" });
+        showSaveToastMessage(msg.message, "success");
+      } else {
+        const filePath = await save({
+          filters: [{ name: 'Image', extensions: ['png'] }],
+          defaultPath: `Batch_${result.label.replace(/\s+/g, '_')}_${Date.now()}.png`
+        });
+        if (filePath) {
+          const msg = await invoke("save_to_path", { b64: b64Data, path: filePath });
+          showSaveToastMessage(String(msg), "success");
+        }
+      }
+    } catch (e) {
+      showSaveToastMessage("Failed to save batch item: " + e, "error");
+    }
+  }
+
+  async function saveAllBatchAsZip() {
+    console.log("saveAllBatchAsZip called, results count:", batchResults.length);
+    if (!batchResults.length) return;
+    try {
+      const isMobile = isNativeMobileDevice();
+      if (isMobile) {
+        showSaveToastMessage("ZIP export is not supported on mobile yet.", "error");
+        return;
+      }
+
+      const filePath = await save({
+        filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+        defaultPath: `Batch_Export_${Date.now()}.zip`
+      });
+
+      if (filePath) {
+        batchBusy = true;
+        const msg = await invoke("save_batch_as_zip", { items: batchResults, path: filePath });
+        showSaveToastMessage(String(msg), "success");
+      }
+    } catch (e) {
+      showSaveToastMessage("Failed to export ZIP: " + e, "error");
+    } finally {
+      batchBusy = false;
+    }
+  }
+
   function classifyScan(content: string, format: Format) {
     if (format !== Format.QRCode) return "Barcode";
+    if (isEncryptedQrPayload(content)) return "Encrypted QR";
     if (/^(https?:\/\/|www\.)/i.test(content)) return "Link";
     if (/^(bitcoin|ethereum|litecoin|dogecoin|solana):/i.test(content)) return "Crypto Wallet";
     if (/^(mailto:|tel:|sms:|smsto:|geo:)/i.test(content)) return "Action";
@@ -848,7 +1890,223 @@
     return /^(https?:\/\/|www\.|mailto:|tel:|sms:|smsto:|geo:)/i.test(value.trim());
   }
 
+  function isEncryptedQrPayload(value: string) {
+    return value.trim().startsWith("QRU1:");
+  }
+
+  function useEncryptedPayloadForQr(payload: string) {
+    dataType = "Text";
+    qrData = payload.trim();
+    runGeneration();
+  }
+
+  function getForensicDateStamp() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const year = now.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  function getPayloadForensicDate(payload: string) {
+    try {
+      const encoded = payload.trim().replace(/^QRU1:/, "");
+      const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, "=");
+      const decoded = atob(padded);
+      const parsed = JSON.parse(decoded);
+      return typeof parsed.created_date === "string" ? parsed.created_date : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function getPayloadAlgorithmLabel(payload: string) {
+    try {
+      const encoded = payload.trim().replace(/^QRU1:/, "");
+      const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, "=");
+      const decoded = atob(padded);
+      const parsed = JSON.parse(decoded);
+      if (parsed.algorithm === "aes-256-gcm") return "AES-256-GCM";
+      if (parsed.algorithm === "chacha20-poly1305") return "ChaCha20-Poly1305";
+      return typeof parsed.algorithm === "string" ? parsed.algorithm : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function hideScanDecryptSuccessBanner() {
+    showScanDecryptSuccessBanner = false;
+    if (scanDecryptSuccessTimer) {
+      clearTimeout(scanDecryptSuccessTimer);
+      scanDecryptSuccessTimer = null;
+    }
+  }
+
+  function showTemporaryScanDecryptSuccessBanner() {
+    showScanDecryptSuccessBanner = true;
+    if (scanDecryptSuccessTimer) clearTimeout(scanDecryptSuccessTimer);
+    scanDecryptSuccessTimer = setTimeout(() => {
+      showScanDecryptSuccessBanner = false;
+      scanDecryptSuccessTimer = null;
+    }, 4200);
+  }
+
+  function loadScannedEncryptedPayload() {
+    decryptPayload = scannedResult.trim();
+    decryptedPlaintext = "";
+    decryptedForensicDate = "";
+    handleEncryptedQrScan(scannedResult);
+  }
+
+  function handleEncryptedQrScan(payload: string) {
+    scanEncryptedPayload = payload.trim();
+    scanDecryptPassphrase = "";
+    scanDecryptedPlaintext = "";
+    scanDecryptedForensicDate = "";
+    hideScanDecryptSuccessBanner();
+    scanDecryptError = "";
+    showScanDecryptPassphrase = false;
+    showScanDecryptModal = true;
+    decryptPayload = scanEncryptedPayload;
+    decryptedPlaintext = "";
+    decryptedForensicDate = "";
+  }
+
+  function closeScanDecryptModal() {
+    showScanDecryptModal = false;
+    scanEncryptedPayload = "";
+    scanDecryptPassphrase = "";
+    scanDecryptedPlaintext = "";
+    scanDecryptedForensicDate = "";
+    hideScanDecryptSuccessBanner();
+    scanDecryptError = "";
+    showScanDecryptPassphrase = false;
+  }
+
+  function retryScanDecryption() {
+    scanDecryptPassphrase = "";
+    scanDecryptedPlaintext = "";
+    scanDecryptedForensicDate = "";
+    hideScanDecryptSuccessBanner();
+    scanDecryptError = "";
+    showScanDecryptPassphrase = false;
+  }
+
+  async function decryptScannedEncryptedQr() {
+    if (!scanDecryptPassphrase) {
+      scanDecryptError = "Enter the passphrase for this encrypted QR.";
+      return;
+    }
+
+    cryptoBusy = true;
+    scanDecryptError = "";
+    scanDecryptedPlaintext = "";
+    scanDecryptedForensicDate = "";
+    hideScanDecryptSuccessBanner();
+    try {
+      scanDecryptedPlaintext = await invoke<string>("decrypt_qr_payload", {
+        encryptedPayload: scanEncryptedPayload,
+        passphrase: scanDecryptPassphrase
+      });
+      scanDecryptedForensicDate = getPayloadForensicDate(scanEncryptedPayload);
+      showTemporaryScanDecryptSuccessBanner();
+      scannedResult = scanDecryptedPlaintext;
+      scannedKind = canOpenResult(scanDecryptedPlaintext) ? "Decrypted Link" : "Decrypted Text";
+      decryptPayload = scanEncryptedPayload;
+      decryptedPlaintext = scanDecryptedPlaintext;
+      decryptedForensicDate = scanDecryptedForensicDate;
+      showSaveToastMessage(
+        scanDecryptedForensicDate
+          ? `Encrypted QR verified. Forensic date: ${scanDecryptedForensicDate}.`
+          : "Encrypted QR decrypted locally. No forensic date found.",
+        "success"
+      );
+    } catch (e) {
+      scanDecryptError = "Could not decrypt. Check the passphrase and QR payload.";
+    } finally {
+      cryptoBusy = false;
+    }
+  }
+
+  async function encryptPlaintextForQr() {
+    if (!encryptPlaintext.trim()) {
+      showSaveToastMessage("Enter plaintext before encrypting.", "error");
+      return;
+    }
+    if (!encryptPassphrase) {
+      showSaveToastMessage("Enter a passphrase before encrypting.", "error");
+      return;
+    }
+
+    cryptoBusy = true;
+    encryptedPayload = "";
+    encryptedForensicDate = getForensicDateStamp();
+    try {
+      encryptedPayload = await invoke<string>("encrypt_qr_payload", {
+        plaintext: encryptPlaintext,
+        passphrase: encryptPassphrase,
+        encryptionAlgorithm,
+        forensicDate: encryptedForensicDate
+      });
+      useEncryptedPayloadForQr(encryptedPayload);
+      showSaveToastMessage(`Encrypted payload dated ${encryptedForensicDate}.`, "success");
+      
+      // CONFETTI / SUCCESS GLOW
+      triggerSuccessGlow();
+    } catch (e) {
+      encryptedForensicDate = "";
+      showSaveToastMessage("Encryption failed: " + e, "error");
+    } finally {
+      cryptoBusy = false;
+    }
+  }
+
+  function triggerSuccessGlow() {
+    const preview = document.querySelector('.preview-area');
+    if (preview) {
+      preview.classList.add('success-glow');
+      setTimeout(() => preview.classList.remove('success-glow'), 2000);
+    }
+  }
+
+  async function decryptEncryptedQrPayload() {
+    if (!decryptPayload.trim()) {
+      showSaveToastMessage("Paste or scan an encrypted QR payload first.", "error");
+      return;
+    }
+    if (!decryptPassphrase) {
+      showSaveToastMessage("Enter the passphrase before decrypting.", "error");
+      return;
+    }
+
+    cryptoBusy = true;
+    decryptedPlaintext = "";
+    decryptedForensicDate = "";
+    try {
+      decryptedPlaintext = await invoke<string>("decrypt_qr_payload", {
+        encryptedPayload: decryptPayload.trim(),
+        passphrase: decryptPassphrase
+      });
+      decryptedForensicDate = getPayloadForensicDate(decryptPayload);
+      showSaveToastMessage(
+        decryptedForensicDate
+          ? `Payload verified. Forensic date: ${decryptedForensicDate}.`
+          : "Decrypted payload locally. No forensic date found.",
+        "success"
+      );
+      
+      triggerSuccessGlow();
+    } catch (e) {
+      showSaveToastMessage("Decryption failed: " + e, "error");
+    } finally {
+      cryptoBusy = false;
+    }
+  }
+
   function getGeneratedLabel() {
+    if ((dataType === "URL" || dataType === "Text") && isEncryptedQrPayload(qrData)) return "Encrypted QR Payload";
     if (dataType === "DogTag" && petName.trim()) return `${petName.trim()} Dog Tag`;
     if (dataType === "WiFi" && wifiSsid.trim()) return `${wifiSsid.trim()} WiFi`;
     if (dataType === "vCard" && (vCardFirst.trim() || vCardLast.trim())) return `${vCardFirst.trim()} ${vCardLast.trim()}`.trim();
@@ -866,6 +2124,10 @@
     if (dataType === "TikTok" && tiktokUser.trim()) return `TikTok ${tiktokUser.trim()}`;
     if (dataType === "Zoom" && zoomMeetingId.trim()) return `Zoom ${zoomMeetingId.trim()}`;
     if (dataType === "URL" && qrData.trim()) return qrData.trim();
+    if (dataType === "Text" && qrData.trim()) {
+      const clean = qrData.trim();
+      return clean.length > 20 ? clean.slice(0, 17) + "..." : clean;
+    }
     return `${dataType} QR Code`;
   }
 
@@ -967,6 +2229,7 @@
     scannedResult = ""; 
     scannedFormat = "";
     scannedKind = "";
+    closeScanDecryptModal();
     try {
       try {
         await requestPermissions();
@@ -979,9 +2242,13 @@
       const result = await scan({ windowed: true, cameraDirection: "back", formats: scannerFormats });
       
       if (result && result.content) {
-         scannedResult = result.content.trim();
+         const payload = result.content.trim();
          scannedFormat = toDisplayCase(result.format);
-         scannedKind = classifyScan(scannedResult, result.format);
+         scannedResult = payload;
+         scannedKind = classifyScan(payload, result.format);
+         if (isEncryptedQrPayload(payload)) {
+           handleEncryptedQrScan(payload);
+         }
       }
     } catch (e) {
       if (e !== "Canceled" && e !== "cancel") {
@@ -1021,13 +2288,60 @@
           await navigator.clipboard.writeText(text);
           showSaveToastMessage("Copied to clipboard.", "success");
       } catch (err) {
-          showSaveToastMessage("Clipboard failed. Please copy manually.", "error");
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.setAttribute("readonly", "");
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.select();
+          try {
+            const copied = document.execCommand("copy");
+            showSaveToastMessage(copied ? "Copied to clipboard." : "Clipboard failed. Please copy manually.", copied ? "success" : "error");
+          } catch {
+            showSaveToastMessage("Clipboard failed. Please copy manually.", "error");
+          } finally {
+            document.body.removeChild(textArea);
+          }
       }
+  }
+
+  function getPassphraseStrength(passphrase: string) {
+    let score = 0;
+    if (passphrase.length >= 10) score++;
+    if (passphrase.length >= 16) score++;
+    if (/[a-z]/.test(passphrase) && /[A-Z]/.test(passphrase)) score++;
+    if (/\d/.test(passphrase)) score++;
+    if (/[^A-Za-z0-9]/.test(passphrase)) score++;
+
+    if (!passphrase) return { label: "Not set", className: "empty", percent: 0 };
+    if (score <= 2) return { label: "Weak", className: "weak", percent: 34 };
+    if (score <= 4) return { label: "Good", className: "good", percent: 68 };
+    return { label: "Strong", className: "strong", percent: 100 };
+  }
+
+  async function copySvg() {
+    if (!qrImagePng) return;
+    try {
+      const svg = await invoke<string>("generate_ultra_qr_svg", {
+        options: buildQrRenderOptions(generatedPayload || buildFinalQrData())
+      });
+      await navigator.clipboard.writeText(svg);
+      showSaveToastMessage("SVG copied to clipboard.", "success");
+    } catch (e) {
+      showSaveToastMessage("Could not copy SVG: " + e, "error");
+    }
+  }
+
+  async function quickSave(format: string) {
+    saveFormat = format;
+    await saveImage();
   }
 
   // --- VALIDATION ---
   function validateInputs() {
-    if (dataType === "URL" && !qrData.trim()) return "Please enter a valid URL or text.";
+    if (dataType === "URL" && !qrData.trim()) return "Please enter a valid URL.";
+    if (dataType === "Text" && !qrData.trim()) return "Please enter the text content.";
     if (dataType === "WiFi" && !wifiSsid.trim()) return "Please enter the WiFi Network Name (SSID).";
     if (dataType === "vCard" && (!vCardFirst.trim() || !vCardPhone.trim())) return "Please enter at least a First Name and Phone Number for the contact.";
     if (dataType === "Email" && !emailTo.trim()) return "Please enter a destination Email Address.";
@@ -1064,7 +2378,7 @@
     runGeneration();
   }
 
-  // --- CANVAS HELPERS ---
+  // --- CONSOLIDATED CANVAS HELPERS ---
   const drawShapePath = (c: CanvasRenderingContext2D, s: string, cx: number, cy: number, sz: number) => {
     c.beginPath();
     if (s === "circle") {
@@ -1155,36 +2469,89 @@
     cy: number,
     size: number,
     color: string,
-    palette: { c1: string; c2: string; c3?: string; c4?: string },
-    useGradient: boolean
+    palette?: { c1: string; c2: string; c3?: string; c4?: string },
+    useGradientColor = false
   ) => {
     if (style === "none") return;
-    c.save();
-    c.lineJoin = "round";
-    c.lineCap = "round";
 
-    let gradient: CanvasGradient | null = null;
-    if (useGradient) {
-      gradient = c.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
-      applyGradientStops(gradient, palette.c1, palette.c2, palette.c3, palette.c4, Boolean(palette.c4));
+    c.save();
+    c.strokeStyle = color;
+    c.fillStyle = color;
+
+    if (style === "gradient" || useGradientColor) {
+      const grad = c.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
+      const gradientPalette = palette ?? getGradientPalette(color1, color2, color3, color4, useFourthStop);
+      applyGradientStops(
+        grad,
+        gradientPalette.c1,
+        gradientPalette.c2,
+        gradientPalette.c3,
+        gradientPalette.c4,
+        Boolean(gradientPalette.c4)
+      );
+      c.strokeStyle = grad;
+      c.fillStyle = grad;
     }
 
-    c.strokeStyle = useGradient && gradient ? gradient : color;
-    const baseLine = Math.max(4, size * 0.04);
+    const baseLine = Math.max(4, size * 0.034);
+    const half = size / 2;
 
-    if (style === "dashed") {
-      c.setLineDash([baseLine * 2, baseLine * 2]);
+    if (style === "double") {
+      c.lineWidth = Math.max(2, size * 0.012);
+      const offset = size * 0.034;
+      drawShapePath(c, shape, cx, cy, size + offset); c.stroke();
+      drawShapePath(c, shape, cx, cy, size - offset); c.stroke();
+    } else if (style === "dotted") {
       c.lineWidth = baseLine;
+      c.setLineDash([2, Math.max(10, size * 0.064)]);
+      c.lineCap = "round";
       drawShapePath(c, shape, cx, cy, size); c.stroke();
-    } else if (style === "double") {
-      c.lineWidth = baseLine * 0.4;
+    } else if (style === "dashed") {
+      c.lineWidth = baseLine;
+      c.setLineDash([Math.max(12, size * 0.072), Math.max(10, size * 0.043)]);
       drawShapePath(c, shape, cx, cy, size); c.stroke();
-      drawShapePath(c, shape, cx, cy, size - baseLine * 1.5); c.stroke();
-    } else if (style === "glow") {
-      c.shadowBlur = baseLine * 2;
+    } else if (style === "rounded") {
+      c.lineWidth = baseLine;
+      c.setLineDash([Math.max(10, size * 0.043), Math.max(8, size * 0.028)]);
+      c.lineCap = "round";
+      drawShapePath(c, shape, cx, cy, size); c.stroke();
+    } else if (style === "diamond") {
+      const count = Math.max(16, Math.round(size / 16));
+      const diamondSize = Math.max(6, size * 0.034);
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2;
+        let x = Math.cos(angle) * half;
+        let y = Math.sin(angle) * half;
+
+        if (shape === "square" || shape === "diamond") {
+          if (shape === "diamond") {
+            const angleRot = angle + Math.PI / 4;
+            let rx = Math.cos(angleRot);
+            let ry = Math.sin(angleRot);
+            const scale = (half / Math.sqrt(2)) / Math.max(Math.abs(rx), Math.abs(ry));
+            const tx = rx * scale;
+            const ty = ry * scale;
+            x = (tx - ty) / Math.sqrt(2);
+            y = (tx + ty) / Math.sqrt(2);
+          } else {
+            const scale = half / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
+            x = Math.cos(angle) * scale;
+            y = Math.sin(angle) * scale;
+          }
+        }
+
+        c.save();
+        c.translate(cx + x, cy + y);
+        c.rotate(angle + Math.PI / 4);
+        c.fillRect(-diamondSize / 2, -diamondSize / 2, diamondSize, diamondSize);
+        c.restore();
+      }
+    } else if (style === "neon") {
+      c.lineWidth = Math.max(4, size * 0.028);
       c.shadowColor = color;
-      c.lineWidth = baseLine;
+      c.shadowBlur = Math.max(10, size * 0.038);
       drawShapePath(c, shape, cx, cy, size); c.stroke();
+      c.stroke();
       c.strokeStyle = "#FFFFFF";
       c.lineWidth = Math.max(2, size * 0.006);
       c.shadowBlur = 0;
@@ -1206,32 +2573,46 @@
     width: number,
     height: number,
     color: string,
-    palette: { c1: string; c2: string; c3?: string; c4?: string },
-    useGradient: boolean
+    palette?: { c1: string; c2: string; c3?: string; c4?: string },
+    useGradientColor = false
   ) => {
     if (style === "none") return;
     c.save();
     c.lineJoin = "round";
     c.lineCap = "round";
+    c.strokeStyle = color;
+    c.fillStyle = color;
 
-    let gradient: CanvasGradient | null = null;
-    if (useGradient) {
-      gradient = c.createLinearGradient(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2);
-      applyGradientStops(gradient, palette.c1, palette.c2, palette.c3, palette.c4, Boolean(palette.c4));
+    if (style === "gradient" || useGradientColor) {
+      const grad = c.createLinearGradient(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2);
+      const gradientPalette = palette ?? getGradientPalette(color1, color2, color3, color4, useFourthStop);
+      applyGradientStops(
+        grad,
+        gradientPalette.c1,
+        gradientPalette.c2,
+        gradientPalette.c3,
+        gradientPalette.c4,
+        Boolean(gradientPalette.c4)
+      );
+      c.strokeStyle = grad;
+      c.fillStyle = grad;
     }
 
-    c.strokeStyle = useGradient && gradient ? gradient : color;
     const baseLine = Math.max(4, Math.min(width, height) * 0.04);
 
     if (style === "dashed") {
       c.setLineDash([baseLine * 2, baseLine * 2]);
       c.lineWidth = baseLine;
       drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
+    } else if (style === "dotted") {
+      c.lineWidth = baseLine;
+      c.setLineDash([2, 6]);
+      drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
     } else if (style === "double") {
       c.lineWidth = baseLine * 0.4;
       drawShapePathRect(c, shape, cx, cy, width, height); c.stroke();
       drawShapePathRect(c, shape, cx, cy, width - baseLine * 1.5, height - baseLine * 1.5); c.stroke();
-    } else if (style === "glow") {
+    } else if (style === "neon") {
       c.shadowBlur = baseLine * 2;
       c.shadowColor = color;
       c.lineWidth = baseLine;
@@ -1248,17 +2629,31 @@
     c.restore();
   };
 
-  const drawCenterOverlay = (c: CanvasRenderingContext2D, width: number, height: number) => {
+  const drawGlobalCenterOverlay = (c: CanvasRenderingContext2D, centerX: number, centerY: number, renderedQrSize: number) => {
     if (!logoBase64 || centerOverlayMode === "none") return;
     if (centerOverlayMode === "match" && !enableFrame) return;
+
     const overlayStyle = centerOverlayMode === "match" && enableFrame ? ringStyle : centerOverlayStyle;
     const overlayColor = centerOverlayMode === "match" && enableFrame ? ringColor : centerOverlayColor;
     const overlayPalette = centerOverlayMode === "match" && enableFrame ? getRingPalette() : getCenterOverlayPalette();
     const overlayUsesGradient = centerOverlayMode === "match" && enableFrame
       ? (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")
       : (centerOverlayStyle !== "solid" && centerOverlayStyle !== "none" && centerOverlayColorMode === "gradient");
+
     if (overlayStyle === "none") return;
-    drawRingDecorationRect(c, overlayStyle, bgShape, width / 2, height / 2, width, height, overlayColor, overlayPalette, overlayUsesGradient);
+    const dimensions = getCenterOverlayDimensions(renderedQrSize);
+    drawRingDecorationRect(
+      c,
+      overlayStyle,
+      bgShape,
+      centerX,
+      centerY,
+      dimensions.width,
+      dimensions.height,
+      overlayColor,
+      overlayPalette,
+      overlayUsesGradient
+    );
   };
 
   const getPathPoint = (shape: string, progress: number, radius: number, cx = 400, cy = 400): { x: number; y: number; angle: number } => {
@@ -1318,22 +2713,66 @@
         angle = -Math.PI / 4;
       }
     } else if (shape === "octagon") {
-      const side = radius * 0.765; // side length for octagon inscribed in circle
       const p = progress % 1;
-      const sector = Math.floor(p * 8);
+      const side = radius * 0.28 * 2;
+      const corner = (radius - radius * 0.28);
+      // Simplified octagon path: 8 segments
+      const seg = Math.floor(p * 8);
       const f = (p * 8) % 1;
-      const step = Math.PI / 4;
-      const startAngle = sector * step - Math.PI / 2 - step / 2;
-      const endAngle = startAngle + step;
+      const pts = [
+        {x: cx-radius*0.28, y: cy-radius, a: 0},
+        {x: cx+radius*0.28, y: cy-radius, a: Math.PI/4},
+        {x: cx+radius, y: cy-radius*0.28, a: Math.PI/2},
+        {x: cx+radius, y: cy+radius*0.28, a: 3*Math.PI/4},
+        {x: cx+radius*0.28, y: cy+radius, a: Math.PI},
+        {x: cx-radius*0.28, y: cy+radius, a: -3*Math.PI/4},
+        {x: cx-radius, y: cy+radius*0.28, a: -Math.PI/2},
+        {x: cx-radius, y: cy-radius*0.28, a: -Math.PI/4}
+      ];
+      const p1 = pts[seg];
+      const p2 = pts[(seg+1)%8];
+      x = p1.x + (p2.x - p1.x) * f;
+      y = p1.y + (p2.y - p1.y) * f;
+      angle = p1.a;
+    } else if (shape === "rounded") {
+      const r = radius * 0.2;
+      const side = (radius - r) * 2;
+      const arcLen = Math.PI * r / 2;
+      const totalLen = 4 * side + 4 * arcLen;
+      let d = progress * totalLen;
 
-      const x1 = cx + Math.cos(startAngle) * radius;
-      const y1 = cy + Math.sin(startAngle) * radius;
-      const x2 = cx + Math.cos(endAngle) * radius;
-      const y2 = cy + Math.sin(endAngle) * radius;
+      // Start from top center
+      d = (d + side / 2 + totalLen) % totalLen;
 
-      x = x1 + f * (x2 - x1);
-      y = y1 + f * (y2 - y1);
-      angle = startAngle + step / 2 + Math.PI / 2;
+      if (d < side) { // Top side
+        x = cx - (radius-r) + d; y = cy - radius; angle = 0;
+      } else if (d < side + arcLen) { // Top-right arc
+        const a = (d - side) / arcLen * (Math.PI/2) - Math.PI/2;
+        x = cx + (radius-r) + Math.cos(a) * r;
+        y = cy - (radius-r) + Math.sin(a) * r;
+        angle = a + Math.PI/2;
+      } else if (d < 2*side + arcLen) { // Right side
+        x = cx + radius; y = cy - (radius-r) + (d - side - arcLen); angle = Math.PI/2;
+      } else if (d < 2*side + 2*arcLen) { // Bottom-right arc
+        const a = (d - 2*side - arcLen) / arcLen * (Math.PI/2);
+        x = cx + (radius-r) + Math.cos(a) * r;
+        y = cy + (radius-r) + Math.sin(a) * r;
+        angle = a + Math.PI/2;
+      } else if (d < 3*side + 2*arcLen) { // Bottom side
+        x = cx + (radius-r) - (d - 2*side - 2*arcLen); y = cy + radius; angle = Math.PI;
+      } else if (d < 3*side + 3*arcLen) { // Bottom-left arc
+        const a = (d - 3*side - 2*arcLen) / arcLen * (Math.PI/2) + Math.PI/2;
+        x = cx - (radius-r) + Math.cos(a) * r;
+        y = cy + (radius-r) + Math.sin(a) * r;
+        angle = a + Math.PI/2;
+      } else if (d < 4*side + 3*arcLen) { // Left side
+        x = cx - radius; y = cy + (radius-r) - (d - 3*side - 3*arcLen); angle = -Math.PI/2;
+      } else { // Top-left arc
+        const a = (d - 4*side - 3*arcLen) / arcLen * (Math.PI/2) + Math.PI;
+        x = cx - (radius-r) + Math.cos(a) * r;
+        y = cy - (radius-r) + Math.sin(a) * r;
+        angle = a + Math.PI/2;
+      }
     } else {
       // Default fallback (circle)
       const a = progress * Math.PI * 2 - Math.PI / 2;
@@ -1343,6 +2782,174 @@
     }
     return { x, y, angle };
   };
+
+  const getFrameRingClearance = (style: string, size: number, textSize: number, isTopText = false) => {
+    const baseLine = Math.max(4, size * 0.034);
+    let ringInset = baseLine / 2;
+
+    if (style === "double") {
+      ringInset = size * 0.034 + Math.max(2, size * 0.012) / 2;
+    } else if (style === "diamond") {
+      ringInset = Math.max(6, size * 0.034) / 2 + 8;
+    } else if (style === "neon") {
+      ringInset = Math.max(4, size * 0.028) / 2 + 10;
+    }
+
+    const topTextBreathingRoom = isTopText ? 24 : 0;
+    return ringInset + textSize * 0.65 + 10 + topTextBreathingRoom;
+  };
+
+  const drawFrameText = (ctx: CanvasRenderingContext2D, text: string, isTop: boolean, cx = 400, cy = 400) => {
+    if (!text) return;
+
+    const currentSize = isTop ? frameTextTopSize : frameTextSize;
+    const currentColor = isTop ? frameTextTopColor : frameTextColor;
+    const currentMatchStyle = isTop ? matchTextTopStyle : matchTextStyle;
+    const currentTransparentBg = isTop ? transparentTextTopBg : transparentTextBg;
+    const currentMode = isTop ? frameTextTopMode : frameTextMode;
+    const currentRadius = isTop ? frameTextTopRadius : frameTextRadius;
+    const currentSpacing = isTop ? frameTextTopSpacing : frameTextSpacing;
+
+    const applyTextColor = (textWidth: number, currentMatchStyle: boolean, currentColor: string, isCurved = false) => {
+      if (currentMatchStyle) {
+        if (ringStyle === "gradient" || (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")) {
+          const gradX0 = isCurved ? -textWidth / 2 : cx - textWidth / 2;
+          const gradX1 = isCurved ? textWidth / 2 : cx + textWidth / 2;
+          const grad = ctx.createLinearGradient(gradX0, 0, gradX1, 0);
+          const ringPalette = getRingPalette();
+          applyGradientStops(grad, ringPalette.c1, ringPalette.c2, ringPalette.c3, ringPalette.c4, Boolean(ringPalette.c4));
+          ctx.fillStyle = grad;
+        } else if (ringStyle === "neon") {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.shadowColor = ringColor;
+          ctx.shadowBlur = 10;
+        } else if (ringStyle === "diamond") {
+          ctx.fillStyle = ringColor;
+        } else {
+          ctx.fillStyle = currentColor;
+        }
+      } else {
+        ctx.fillStyle = currentColor;
+      }
+    };
+
+    ctx.save();
+    ctx.font = `bold ${currentSize}px 'Segoe UI', Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    if (currentMode === "curved") {
+      const safeRadius = 700 / 2 - getFrameRingClearance(ringStyle, 700, currentSize, isTop);
+      const curvedRadius = Math.max(200, Math.min(currentRadius, safeRadius));
+      const chars = text.toUpperCase().split("");
+      const charWidths = chars.map(c => ctx.measureText(c).width + currentSpacing);
+      const totalTextWidth = charWidths.reduce((a, b) => a + b, 0);
+
+      let perimeter = 2 * Math.PI * curvedRadius;
+      if (bgShape === "square") perimeter = 8 * curvedRadius;
+      else if (bgShape === "diamond") perimeter = 4 * curvedRadius * Math.sqrt(2);
+      else if (bgShape === "octagon") perimeter = 8 * curvedRadius * 0.828;
+      else if (bgShape === "rounded") {
+          const side = (curvedRadius - curvedRadius * 0.2) * 2;
+          const arc = Math.PI * (curvedRadius * 0.2) / 2;
+          perimeter = 4 * side + 4 * arc;
+      }
+
+      const widthToProgress = 1 / perimeter;
+      const direction = isTop ? 1 : -1;
+      const startProgress = isTop
+        ? -(totalTextWidth / 2) * widthToProgress
+        : 0.5 + (totalTextWidth / 2) * widthToProgress;
+
+      let currentProgress = startProgress;
+      chars.forEach((char, i) => {
+        const charProgress = currentProgress + direction * (charWidths[i] / 2) * widthToProgress;
+        const { x, y, angle } = getPathPoint(bgShape, charProgress, curvedRadius, cx, cy);
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(isTop ? angle : angle + Math.PI);
+
+        applyTextColor(totalTextWidth, currentMatchStyle, currentColor, true);
+        ctx.fillText(char, 0, 0);
+        ctx.restore();
+
+        currentProgress += direction * charWidths[i] * widthToProgress;
+      });
+    } else {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const textWidth = ctx.measureText(text.toUpperCase()).width;
+
+      let badgeY = isTop ? 112 : 700;
+      if (bgShape === "diamond") badgeY = isTop ? 166 : 640;
+      else if (bgShape === "octagon") badgeY = isTop ? 140 : 670;
+      else if (bgShape === "rounded") badgeY = isTop ? 122 : 690;
+      else if (bgShape === "circle") badgeY = isTop ? 112 : 700;
+
+      const badgeWidth = textWidth + 80;
+      const badgeHeight = 70;
+
+      if (!currentTransparentBg) {
+        ctx.fillStyle = bgColor;
+        if (currentMatchStyle && ringStyle === "neon") {
+          ctx.shadowColor = ringColor;
+          ctx.shadowBlur = 20;
+        }
+
+        const bx = cx - badgeWidth / 2;
+        const by = badgeY - badgeHeight / 2;
+        if (currentMatchStyle && (ringStyle === "rounded" || bgShape === "rounded")) {
+          const r = 15;
+          ctx.beginPath();
+          ctx.moveTo(bx + r, by);
+          ctx.lineTo(bx + badgeWidth - r, by);
+          ctx.quadraticCurveTo(bx + badgeWidth, by, bx + badgeWidth, by + r);
+          ctx.lineTo(bx + badgeWidth, by + badgeHeight - r);
+          ctx.quadraticCurveTo(bx + badgeWidth, by + badgeHeight, bx + badgeWidth - r, by + badgeHeight);
+          ctx.lineTo(bx + r, by + badgeHeight);
+          ctx.quadraticCurveTo(bx, by + badgeHeight, bx, by + badgeHeight - r);
+          ctx.lineTo(bx, by + r);
+          ctx.quadraticCurveTo(bx, by, bx + r, by);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillRect(bx, by, badgeWidth, badgeHeight);
+        }
+
+        if (currentMatchStyle) {
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = ringColor;
+          ctx.lineWidth = 3;
+          if (ringStyle === "dotted") ctx.setLineDash([2, 6]);
+          else if (ringStyle === "dashed") ctx.setLineDash([12, 6]);
+          else if (ringStyle === "double") ctx.lineWidth = 1;
+
+          if (ringStyle !== "none" && ringStyle !== "neon" && ringStyle !== "gradient") {
+            if (ringStyle === "rounded" || bgShape === "rounded") {
+              ctx.stroke();
+              if (ringStyle === "double") {
+                ctx.save();
+                ctx.translate(2, 2); ctx.scale((badgeWidth-4)/badgeWidth, (badgeHeight-4)/badgeHeight);
+                ctx.stroke();
+                ctx.restore();
+              }
+            } else {
+              ctx.strokeRect(bx, by, badgeWidth, badgeHeight);
+              if (ringStyle === "double") {
+                ctx.strokeRect(bx + 5, by + 5, badgeWidth - 10, badgeHeight - 10);
+              }
+            }
+          }
+          ctx.setLineDash([]);
+        }
+      }
+
+      applyTextColor(textWidth, currentMatchStyle, currentColor);
+      ctx.fillText(text.toUpperCase(), cx, badgeY);
+    }
+    ctx.restore();
+  };
+
 
   async function runGeneration() {
     showDogTagWarning = false;
@@ -1363,580 +2970,114 @@
             throw new Error("Preview canvas context could not be created.");
           }
 
-          const drawShapePath = (c: CanvasRenderingContext2D, s: string, cx: number, cy: number, sz: number) => {
-            c.beginPath();
-            if (s === "circle") {
-              c.arc(cx, cy, sz / 2, 0, Math.PI * 2);
-            } else if (s === "rounded") {
-              const r = sz * 0.2;
-              const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
-              c.moveTo(cx, top);
-              c.arcTo(right, top, right, bottom, r);
-              c.arcTo(right, bottom, left, bottom, r);
-              c.arcTo(left, bottom, left, top, r);
-              c.arcTo(left, top, right, top, r);
-              c.closePath();
-            } else if (s === "diamond") {
-              c.moveTo(cx, cy - sz / 2);
-              c.lineTo(cx + sz / 2, cy);
-              c.lineTo(cx, cy + sz / 2);
-              c.lineTo(cx - sz / 2, cy);
-              c.closePath();
-            } else if (s === "octagon") {
-              const side = sz * 0.28;
-              const left = cx - sz / 2, top = cy - sz / 2, right = cx + sz / 2, bottom = cy + sz / 2;
-              c.moveTo(cx - side, top);
-              c.lineTo(cx + side, top);
-              c.lineTo(right, cy - side);
-              c.lineTo(right, cy + side);
-              c.lineTo(cx + side, bottom);
-              c.lineTo(cx - side, bottom);
-              c.lineTo(left, cy + side);
-              c.lineTo(left, cy - side);
-              c.closePath();
-            } else {
-              c.rect(cx - sz / 2, cy - sz / 2, sz, sz);
+          if (enableFrame) {
+            canvas.width = 800;
+            canvas.height = 800;
+
+            ctx.save();
+            drawShapePath(ctx, bgShape, 400, 400, 800);
+            ctx.clip();
+
+            if (!transparentFrameBg) {
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, 800, 800);
             }
-          };
 
-        const drawRingDecoration = (
-          c: CanvasRenderingContext2D,
-          style: string,
-          shape: string,
-          cx: number,
-          cy: number,
-          size: number,
-          color: string,
-          palette?: { c1: string; c2: string; c3?: string; c4?: string },
-          useGradientColor = false
-        ) => {
-          if (style === "none") return;
-
-          c.save();
-          c.strokeStyle = color;
-          c.fillStyle = color;
-
-          if (style === "gradient" || useGradientColor) {
-            const grad = c.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
-            const gradientPalette = palette ?? getGradientPalette(color1, color2, color3, color4, useFourthStop);
-            applyGradientStops(
-              grad,
-              gradientPalette.c1,
-              gradientPalette.c2,
-              gradientPalette.c3,
-              gradientPalette.c4,
-              Boolean(gradientPalette.c4)
+            drawRingDecoration(
+              ctx,
+              ringStyle,
+              bgShape,
+              400,
+              400,
+              700,
+              ringColor,
+              getRingPalette(),
+              ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient"
             );
-            c.strokeStyle = grad;
-            c.fillStyle = grad;
-          }
 
-          const baseLine = Math.max(4, size * 0.034);
-          const half = size / 2;
+            ctx.save();
+            drawShapePath(ctx, bgShape, 400, 400, 660);
+            ctx.clip();
 
-          if (style === "double") {
-            c.lineWidth = Math.max(2, size * 0.012);
-            const offset = size * 0.034;
-            drawShapePath(c, shape, cx, cy, size + offset); c.stroke();
-            drawShapePath(c, shape, cx, cy, size - offset); c.stroke();
-          } else if (style === "dotted") {
-            c.lineWidth = baseLine;
-            c.setLineDash([2, Math.max(10, size * 0.064)]);
-            c.lineCap = "round";
-            drawShapePath(c, shape, cx, cy, size); c.stroke();
-          } else if (style === "dashed") {
-            c.lineWidth = baseLine;
-            c.setLineDash([Math.max(12, size * 0.072), Math.max(10, size * 0.043)]);
-            drawShapePath(c, shape, cx, cy, size); c.stroke();
-          } else if (style === "rounded") {
-            c.lineWidth = baseLine;
-            c.setLineDash([Math.max(10, size * 0.043), Math.max(8, size * 0.028)]);
-            c.lineCap = "round";
-            drawShapePath(c, shape, cx, cy, size); c.stroke();
-          } else if (style === "diamond") {
-            const count = Math.max(16, Math.round(size / 16));
-            const diamondSize = Math.max(6, size * 0.034);
-            for (let i = 0; i < count; i++) {
-              const angle = (i / count) * Math.PI * 2;
-              let x = Math.cos(angle) * half;
-              let y = Math.sin(angle) * half;
+            let qrSize = 440;
+            if (bgShape === "diamond") qrSize = 340;
+            else if (bgShape === "octagon") qrSize = 400;
+            else if (bgShape === "rounded") qrSize = 460;
+            else if (bgShape === "square") qrSize = 480;
+            const qrOffset = (800 - qrSize) / 2;
 
-              if (shape === "square" || shape === "diamond") {
-                if (shape === "diamond") {
-                  const angleRot = angle + Math.PI / 4;
-                  let rx = Math.cos(angleRot);
-                  let ry = Math.sin(angleRot);
-                  const scale = (half / Math.sqrt(2)) / Math.max(Math.abs(rx), Math.abs(ry));
-                  const tx = rx * scale;
-                  const ty = ry * scale;
-                  x = (tx - ty) / Math.sqrt(2);
-                  y = (tx + ty) / Math.sqrt(2);
-                } else {
-                  const scale = half / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
-                  x = Math.cos(angle) * scale;
-                  y = Math.sin(angle) * scale;
-                }
-              }
+            ctx.drawImage(img, qrOffset, qrOffset, qrSize, qrSize);
+            drawGlobalCenterOverlay(ctx, 400, 400, qrSize);
+            ctx.restore();
 
-              c.save();
-              c.translate(cx + x, cy + y);
-              c.rotate(angle + Math.PI / 4);
-              c.fillRect(-diamondSize / 2, -diamondSize / 2, diamondSize, diamondSize);
-              c.restore();
-            }
-          } else if (style === "neon") {
-            c.lineWidth = Math.max(4, size * 0.028);
-            c.shadowColor = color;
-            c.shadowBlur = Math.max(10, size * 0.038);
-            drawShapePath(c, shape, cx, cy, size); c.stroke();
-            c.stroke();
-            c.strokeStyle = "#FFFFFF";
-            c.lineWidth = Math.max(2, size * 0.006);
-            c.shadowBlur = 0;
-            drawShapePath(c, shape, cx, cy, size); c.stroke();
+            drawFrameText(ctx, frameTextTop, true);
+            drawFrameText(ctx, frameText, false);
+            ctx.restore();
           } else {
-            c.lineWidth = baseLine;
-            drawShapePath(c, shape, cx, cy, size); c.stroke();
-          }
-
-          c.restore();
-        };
-
-        const drawCenterOverlay = (c: CanvasRenderingContext2D, width: number, height: number) => {
-          if (!logoBase64 || centerOverlayMode === "none") return;
-          if (centerOverlayMode === "match" && !enableFrame) return;
-          const overlayStyle = centerOverlayMode === "match" && enableFrame ? ringStyle : centerOverlayStyle;
-          const overlayColor = centerOverlayMode === "match" && enableFrame ? ringColor : centerOverlayColor;
-          const overlayPalette = centerOverlayMode === "match" && enableFrame ? getRingPalette() : getCenterOverlayPalette();
-          const overlayUsesGradient = centerOverlayMode === "match" && enableFrame
-            ? (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")
-            : (centerOverlayStyle !== "solid" && centerOverlayStyle !== "none" && centerOverlayColorMode === "gradient");
-          if (overlayStyle === "none") return;
-          drawRingDecorationRect(c, overlayStyle, bgShape, canvas.width / 2, canvas.height / 2, width, height, overlayColor, overlayPalette, overlayUsesGradient);
-        };
-
-        if (enableFrame) {
-          canvas.width = 800;
-          canvas.height = 800;
-
-          const frameRingSize = 700;
-          const getFrameRingClearance = (style: string, textSize: number) => {
-            const baseLine = Math.max(4, frameRingSize * 0.034);
-            let ringInset = baseLine / 2;
-
-            if (style === "double") {
-              ringInset = frameRingSize * 0.034 + Math.max(2, frameRingSize * 0.012) / 2;
-            } else if (style === "diamond") {
-              ringInset = Math.max(6, frameRingSize * 0.034) / 2 + 8;
-            } else if (style === "neon") {
-              ringInset = Math.max(4, frameRingSize * 0.028) / 2 + 10;
-            }
-
-            return ringInset + textSize * 0.65 + 10;
-          };
-
-          const getCurvedTextRadius = (requestedRadius: number, textSize: number) => {
-            const safeRadius = frameRingSize / 2 - getFrameRingClearance(ringStyle, textSize);
-            return Math.max(200, Math.min(requestedRadius, safeRadius));
-          };
-
-          ctx.save();
-          drawShapePath(ctx, bgShape, 400, 400, 800);
-          ctx.clip();
-          
-          if (!transparentFrameBg) {
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 800, 800);
-          }
-          
-          // Draw the Ring Frame
-          drawRingDecoration(
-            ctx,
-            ringStyle,
-            bgShape,
-            400,
-            400,
-            frameRingSize,
-            ringColor,
-            getRingPalette(),
-            ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient"
-          );
-
-          ctx.save();
-          drawShapePath(ctx, bgShape, 400, 400, 660);
-          ctx.clip();
-          
-          let qrSize = 440;
-          if (bgShape === "diamond") qrSize = 340;
-          else if (bgShape === "octagon") qrSize = 400;
-          else if (bgShape === "rounded") qrSize = 460;
-          else if (bgShape === "square") qrSize = 480;
-          const qrOffset = (800 - qrSize) / 2;
-
-          ctx.drawImage(img, qrOffset, qrOffset, qrSize, qrSize);
-          const overlayDimensions = getCenterOverlayDimensions(qrSize);
-          drawCenterOverlay(ctx, overlayDimensions.width, overlayDimensions.height);
-          ctx.restore();
-
-          if (frameText || frameTextTop) {
-            const getPathPoint = (shape: string, progress: number, radius: number): { x: number; y: number; angle: number } => {
-              const cx = 400, cy = 400;
-              let x = cx, y = cy, angle = 0;
-
-              if (shape === "circle") {
-                const a = progress * Math.PI * 2 - Math.PI / 2;
-                x = cx + Math.cos(a) * radius;
-                y = cy + Math.sin(a) * radius;
-                angle = a + Math.PI / 2;
-              } else if (shape === "square") {
-                const side = radius * 2;
-                const p = (progress + 0.125) % 1; // Offset to start at top center
-                if (p < 0.25) { // Top
-                  const f = p / 0.25;
-                  x = cx - radius + f * side;
-                  y = cy - radius;
-                  angle = 0;
-                } else if (p < 0.5) { // Right
-                  const f = (p - 0.25) / 0.25;
-                  x = cx + radius;
-                  y = cy - radius + f * side;
-                  angle = Math.PI / 2;
-                } else if (p < 0.75) { // Bottom
-                  const f = (p - 0.5) / 0.25;
-                  x = cx + radius - f * side;
-                  y = cy + radius;
-                  angle = Math.PI;
-                } else { // Left
-                  const f = (p - 0.75) / 0.25;
-                  x = cx - radius;
-                  y = cy + radius - f * side;
-                  angle = -Math.PI / 2;
-                }
-              } else if (shape === "diamond") {
-                const p = (progress + 0.125) % 1;
-                const s = radius * Math.sqrt(2);
-                if (p < 0.25) { // Top-Right
-                  const f = p / 0.25;
-                  x = cx + f * radius;
-                  y = cy - radius + f * radius;
-                  angle = Math.PI / 4;
-                } else if (p < 0.5) { // Bottom-Right
-                  const f = (p - 0.25) / 0.25;
-                  x = cx + radius - f * radius;
-                  y = cy + f * radius;
-                  angle = 3 * Math.PI / 4;
-                } else if (p < 0.75) { // Bottom-Left
-                  const f = (p - 0.5) / 0.25;
-                  x = cx - f * radius;
-                  y = cy + radius - f * radius;
-                  angle = -3 * Math.PI / 4;
-                } else { // Top-Left
-                  const f = (p - 0.75) / 0.25;
-                  x = cx - radius + f * radius;
-                  y = cy - f * radius;
-                  angle = -Math.PI / 4;
-                }
-              } else if (shape === "octagon") {
-                const p = progress % 1;
-                const side = radius * 0.28 * 2;
-                const corner = (radius - radius * 0.28);
-                // Simplified octagon path: 8 segments
-                const seg = Math.floor(p * 8);
-                const f = (p * 8) % 1;
-                const pts = [
-                  {x: cx-radius*0.28, y: cy-radius, a: 0},
-                  {x: cx+radius*0.28, y: cy-radius, a: Math.PI/4},
-                  {x: cx+radius, y: cy-radius*0.28, a: Math.PI/2},
-                  {x: cx+radius, y: cy+radius*0.28, a: 3*Math.PI/4},
-                  {x: cx+radius*0.28, y: cy+radius, a: Math.PI},
-                  {x: cx-radius*0.28, y: cy+radius, a: -3*Math.PI/4},
-                  {x: cx-radius, y: cy+radius*0.28, a: -Math.PI/2},
-                  {x: cx-radius, y: cy-radius*0.28, a: -Math.PI/4}
-                ];
-                const p1 = pts[seg];
-                const p2 = pts[(seg+1)%8];
-                x = p1.x + (p2.x - p1.x) * f;
-                y = p1.y + (p2.y - p1.y) * f;
-                angle = p1.a;
-              } else if (shape === "rounded") {
-                const r = radius * 0.2;
-                const side = (radius - r) * 2;
-                const arcLen = Math.PI * r / 2;
-                const totalLen = 4 * side + 4 * arcLen;
-                let d = progress * totalLen;
-                
-                // Start from top center
-                d = (d + side / 2 + totalLen) % totalLen;
-
-                if (d < side) { // Top side
-                  x = cx - (radius-r) + d; y = cy - radius; angle = 0;
-                } else if (d < side + arcLen) { // Top-right arc
-                  const a = (d - side) / arcLen * (Math.PI/2) - Math.PI/2;
-                  x = cx + (radius-r) + Math.cos(a) * r;
-                  y = cy - (radius-r) + Math.sin(a) * r;
-                  angle = a + Math.PI/2;
-                } else if (d < 2*side + arcLen) { // Right side
-                  x = cx + radius; y = cy - (radius-r) + (d - side - arcLen); angle = Math.PI/2;
-                } else if (d < 2*side + 2*arcLen) { // Bottom-right arc
-                  const a = (d - 2*side - arcLen) / arcLen * (Math.PI/2);
-                  x = cx + (radius-r) + Math.cos(a) * r;
-                  y = cy + (radius-r) + Math.sin(a) * r;
-                  angle = a + Math.PI/2;
-                } else if (d < 3*side + 2*arcLen) { // Bottom side
-                  x = cx + (radius-r) - (d - 2*side - 2*arcLen); y = cy + radius; angle = Math.PI;
-                } else if (d < 3*side + 3*arcLen) { // Bottom-left arc
-                  const a = (d - 3*side - 2*arcLen) / arcLen * (Math.PI/2) + Math.PI/2;
-                  x = cx - (radius-r) + Math.cos(a) * r;
-                  y = cy + (radius-r) + Math.sin(a) * r;
-                  angle = a + Math.PI/2;
-                } else if (d < 4*side + 3*arcLen) { // Left side
-                  x = cx - radius; y = cy + (radius-r) - (d - 3*side - 3*arcLen); angle = -Math.PI/2;
-                } else { // Top-left arc
-                  const a = (d - 4*side - 3*arcLen) / arcLen * (Math.PI/2) + Math.PI;
-                  x = cx - (radius-r) + Math.cos(a) * r;
-                  y = cy - (radius-r) + Math.sin(a) * r;
-                  angle = a + Math.PI/2;
-                }
-              } else {
-                // Default to circle if shape unknown
-                const a = progress * Math.PI * 2 - Math.PI / 2;
-                x = cx + Math.cos(a) * radius;
-                y = cy + Math.sin(a) * radius;
-                angle = a + Math.PI / 2;
-              }
-
-              return { x, y, angle };
-            };
-
-            const drawText = (text: string, isTop: boolean) => {
-              if (!text) return;
-              
-              const currentSize = isTop ? frameTextTopSize : frameTextSize;
-              const currentColor = isTop ? frameTextTopColor : frameTextColor;
-              const currentMatchStyle = isTop ? matchTextTopStyle : matchTextStyle;
-              const currentTransparentBg = isTop ? transparentTextTopBg : transparentTextBg;
-              const currentMode = isTop ? frameTextTopMode : frameTextMode;
-              const currentRadius = isTop ? frameTextTopRadius : frameTextRadius;
-              const currentSpacing = isTop ? frameTextTopSpacing : frameTextSpacing;
-
+            canvas.width = 600;
+            canvas.height = 600;
+            if (bgShape === "circle") {
               ctx.save();
-              ctx.font = `bold ${currentSize}px 'Segoe UI', Arial, sans-serif`;
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              
-              if (currentMode === "curved") {
-                const curvedRadius = getCurvedTextRadius(currentRadius, currentSize);
-                const chars = text.toUpperCase().split("");
-                const charWidths = chars.map(c => ctx.measureText(c).width + currentSpacing);
-                const totalTextWidth = charWidths.reduce((a, b) => a + b, 0);
-                
-                // For curved, we need to find the total perimeter of the shape to map width to progress
-                // Simplified: use a circle's perimeter as a reference or calculate per shape
-                let perimeter = 2 * Math.PI * curvedRadius;
-                if (bgShape === "square") perimeter = 8 * curvedRadius;
-                else if (bgShape === "diamond") perimeter = 4 * curvedRadius * Math.sqrt(2);
-                else if (bgShape === "octagon") perimeter = 8 * curvedRadius * 0.828; // approx
-                else if (bgShape === "rounded") {
-                   const side = (curvedRadius - curvedRadius * 0.2) * 2;
-                   const arc = Math.PI * (curvedRadius * 0.2) / 2;
-                   perimeter = 4 * side + 4 * arc;
-                }
-
-                const widthToProgress = 1 / perimeter;
-                const direction = isTop ? 1 : -1;
-                const startProgress = isTop
-                  ? -(totalTextWidth / 2) * widthToProgress
-                  : 0.5 + (totalTextWidth / 2) * widthToProgress;
-
-                let currentProgress = startProgress;
-                chars.forEach((char, i) => {
-                  const charProgress = currentProgress + direction * (charWidths[i] / 2) * widthToProgress;
-                  const { x, y, angle } = getPathPoint(bgShape, charProgress, curvedRadius);
-                  
-                  ctx.save();
-                  ctx.translate(x, y);
-                  ctx.rotate(isTop ? angle : angle + Math.PI);
-                  
-                  // Apply color for each character
-                  applyTextColor(totalTextWidth, currentMatchStyle, currentColor, true);
-                  ctx.fillText(char, 0, 0);
-                  ctx.restore();
-                  
-                  currentProgress += direction * charWidths[i] * widthToProgress;
-                });
-              } else {
-                // Ensure coordinates are absolute for flat text
-                ctx.setTransform(1, 0, 0, 1, 0, 0); 
-                
-                const textWidth = ctx.measureText(text.toUpperCase()).width;
-
-                let badgeY = isTop ? 88 : 700;
-                if (bgShape === "diamond") badgeY = isTop ? 148 : 640;
-                else if (bgShape === "octagon") badgeY = isTop ? 118 : 670;
-                else if (bgShape === "rounded") badgeY = isTop ? 98 : 690;
-                else if (bgShape === "circle") badgeY = isTop ? 88 : 700;
-
-                const badgeWidth = textWidth + 80;
-                const badgeHeight = 70;
-
-                if (!currentTransparentBg) {
-                  ctx.fillStyle = bgColor;
-                  if (currentMatchStyle && ringStyle === "neon") {
-                    ctx.shadowColor = ringColor;
-                    ctx.shadowBlur = 20;
-                  }
-
-                  const bx = 400 - badgeWidth / 2;
-                  const by = badgeY - badgeHeight / 2;
-                  if (currentMatchStyle && (ringStyle === "rounded" || bgShape === "rounded")) {
-                    const r = 15;
-                    ctx.beginPath();
-                    ctx.moveTo(bx + r, by);
-                    ctx.lineTo(bx + badgeWidth - r, by);
-                    ctx.quadraticCurveTo(bx + badgeWidth, by, bx + badgeWidth, by + r);
-                    ctx.lineTo(bx + badgeWidth, by + badgeHeight - r);
-                    ctx.quadraticCurveTo(bx + badgeWidth, by + badgeHeight, bx + badgeWidth - r, by + badgeHeight);
-                    ctx.lineTo(bx + r, by + badgeHeight);
-                    ctx.quadraticCurveTo(bx, by + badgeHeight, bx, by + badgeHeight - r);
-                    ctx.lineTo(bx, by + r);
-                    ctx.quadraticCurveTo(bx, by, bx + r, by);
-                    ctx.closePath();
-                    ctx.fill();
-                  } else {
-                    ctx.fillRect(bx, by, badgeWidth, badgeHeight);
-                  }
-
-                  if (currentMatchStyle) {
-                    ctx.shadowBlur = 0;
-                    ctx.strokeStyle = ringColor;
-                    ctx.lineWidth = 3;
-                    if (ringStyle === "dotted") ctx.setLineDash([2, 6]);
-                    else if (ringStyle === "dashed") ctx.setLineDash([12, 6]);
-                    else if (ringStyle === "double") ctx.lineWidth = 1;
-
-                    if (ringStyle !== "none" && ringStyle !== "neon" && ringStyle !== "gradient") {
-                      if (ringStyle === "rounded" || bgShape === "rounded") {
-                        ctx.stroke();
-                        if (ringStyle === "double") {
-                          ctx.save();
-                          ctx.translate(2, 2); ctx.scale((badgeWidth-4)/badgeWidth, (badgeHeight-4)/badgeHeight);
-                          ctx.stroke();
-                          ctx.restore();
-                        }
-                      } else {
-                        ctx.strokeRect(bx, by, badgeWidth, badgeHeight);
-                        if (ringStyle === "double") {
-                          ctx.strokeRect(bx + 5, by + 5, badgeWidth - 10, badgeHeight - 10);
-                        }
-                      }
-                    }
-                    ctx.setLineDash([]);
-                  }
-                }
-
-                applyTextColor(textWidth, currentMatchStyle, currentColor);
-                ctx.fillText(text.toUpperCase(), 400, badgeY);
-              }
+              ctx.beginPath();
+              ctx.arc(300, 300, 300, 0, Math.PI * 2);
+              ctx.clip();
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, 600, 600);
+              ctx.drawImage(img, 100, 100, 400, 400);
               ctx.restore();
-            };
-
-            const applyTextColor = (textWidth: number, currentMatchStyle: boolean, currentColor: string, isCurved = false) => {
-              if (currentMatchStyle) {
-                if (ringStyle === "gradient" || (ringStyle !== "solid" && ringStyle !== "none" && ringColorMode === "gradient")) {
-                  const gradX0 = isCurved ? -textWidth / 2 : 400 - textWidth / 2;
-                  const gradX1 = isCurved ? textWidth / 2 : 400 + textWidth / 2;
-                  const grad = ctx.createLinearGradient(gradX0, 0, gradX1, 0);
-                  const ringPalette = getRingPalette();
-                  applyGradientStops(grad, ringPalette.c1, ringPalette.c2, ringPalette.c3, ringPalette.c4, Boolean(ringPalette.c4));
-                  ctx.fillStyle = grad;
-                } else if (ringStyle === "neon") {
-                  ctx.fillStyle = "#FFFFFF";
-                  ctx.shadowColor = ringColor;
-                  ctx.shadowBlur = 10;
-                } else if (ringStyle === "diamond") {
-                  ctx.fillStyle = ringColor;
-                } else {
-                  ctx.fillStyle = currentColor;
-                }
-              } else {
-                ctx.fillStyle = currentColor;
-              }
-            };
-
-            drawText(frameTextTop, true);
-            drawText(frameText, false);
+            } else if (bgShape === "rounded") {
+              const r = 120;
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(300, 0);
+              ctx.arcTo(600, 0, 600, 600, r);
+              ctx.arcTo(600, 600, 0, 600, r);
+              ctx.arcTo(0, 600, 0, 0, r);
+              ctx.arcTo(0, 0, 600, 0, r);
+              ctx.closePath();
+              ctx.clip();
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, 600, 600);
+              ctx.drawImage(img, 10, 10, 580, 580);
+              ctx.restore();
+            } else if (bgShape === "diamond") {
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(300, 0);
+              ctx.lineTo(600, 300);
+              ctx.lineTo(300, 600);
+              ctx.lineTo(0, 300);
+              ctx.closePath();
+              ctx.clip();
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, 600, 600);
+              ctx.drawImage(img, 160, 160, 280, 280);
+              ctx.restore();
+            } else if (bgShape === "octagon") {
+              const c = 160;
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(c, 0);
+              ctx.lineTo(600 - c, 0);
+              ctx.lineTo(600, c);
+              ctx.lineTo(600, 600 - c);
+              ctx.lineTo(600 - c, 600);
+              ctx.lineTo(c, 600);
+              ctx.lineTo(0, 600 - c);
+              ctx.lineTo(0, c);
+              ctx.closePath();
+              ctx.clip();
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, 600, 600);
+              ctx.drawImage(img, 60, 60, 480, 480);
+              ctx.restore();
+            } else {
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, 600, 600);
+              ctx.drawImage(img, 0, 0, 600, 600);
+            }
+            drawGlobalCenterOverlay(ctx, 300, 300, baseQrCanvasSize);
           }
-          ctx.restore();
-        } else {
-          canvas.width = 600;
-          canvas.height = 600;
-          if (bgShape === "circle") {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(300, 300, 300, 0, Math.PI * 2);
-            ctx.clip();
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 600, 600);
-            // QR at 400x400 prevents corner clipping on round background
-            ctx.drawImage(img, 100, 100, 400, 400);
-            ctx.restore();
-          } else if (bgShape === "rounded") {
-            const r = 120; 
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(300, 0);
-            ctx.arcTo(600, 0, 600, 600, r);
-            ctx.arcTo(600, 600, 0, 600, r);
-            ctx.arcTo(0, 600, 0, 0, r);
-            ctx.arcTo(0, 0, 600, 0, r);
-            ctx.closePath();
-            ctx.clip();
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 600, 600);
-            // Draw larger QR so corners are visibly rounded by clipping
-            ctx.drawImage(img, 10, 10, 580, 580);
-            ctx.restore();
-          } else if (bgShape === "diamond") {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(300, 0);
-            ctx.lineTo(600, 300);
-            ctx.lineTo(300, 600);
-            ctx.lineTo(0, 300);
-            ctx.closePath();
-            ctx.clip();
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 600, 600);
-            // Diamond needs much more padding to fit square QR
-            ctx.drawImage(img, 160, 160, 280, 280);
-            ctx.restore();
-          } else if (bgShape === "octagon") {
-            const c = 160;
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(c, 0);
-            ctx.lineTo(600 - c, 0);
-            ctx.lineTo(600, c);
-            ctx.lineTo(600, 600 - c);
-            ctx.lineTo(600 - c, 600);
-            ctx.lineTo(c, 600);
-            ctx.lineTo(0, 600 - c);
-            ctx.lineTo(0, c);
-            ctx.closePath();
-            ctx.clip();
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 600, 600);
-            // Increased padding to ensure eyes are safe but shape is distinct
-            ctx.drawImage(img, 60, 60, 480, 480);
-            ctx.restore();
-          } else {
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 600, 600);
-            ctx.drawImage(img, 0, 0, 600, 600);
-          }
-          const overlayDimensions = getCenterOverlayDimensions(baseQrCanvasSize);
-          drawCenterOverlay(ctx, overlayDimensions.width, overlayDimensions.height);
-        }
 
           qrImagePng = canvas.toDataURL("image/png");
 
@@ -1958,9 +3099,13 @@
             printTitle = generatedLabel;
           }
           generatedAt = new Date().toLocaleString();
-        } catch (e: any) {
+          if (manualGenerationRequested) {
+            rememberGeneration(finalData, generatedLabel);
+            manualGenerationRequested = false;
+          }
+        } catch (e: unknown) {
           console.error(e);
-          showSaveToastMessage("Error generating QR preview: " + (e?.message || e), "error");
+          showSaveToastMessage("Error generating QR preview: " + getErrorMessage(e), "error");
         } finally {
           loading = false;
         }
@@ -1968,12 +3113,14 @@
       img.onerror = () => {
         showSaveToastMessage("Error generating QR preview: generated image could not be loaded.", "error");
         loading = false;
+        manualGenerationRequested = false;
       };
       img.src = rustImageB64;
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      showSaveToastMessage("Error generating QR: " + (e.message || e), "error");
+      showSaveToastMessage("Error generating QR: " + getErrorMessage(e), "error");
       loading = false;
+      manualGenerationRequested = false;
     }
   }
 
@@ -1997,6 +3144,8 @@
       finalData = `https://wa.me/${waPhone.replace(/\D/g, '')}?text=${encodeURIComponent(waMsg)}`;
     } else if (dataType === "Crypto") {
       finalData = buildCryptoPayload();
+    } else if (dataType === "Text") {
+      finalData = qrData;
     } else if (dataType === "Event") {
       const cleanDate = (d: string) => {
         if (!d) return "";
@@ -2088,17 +3237,18 @@
   $: scannedResultCanOpen = canOpenResult(scannedResult);
 </script>
 
-<main class="mobile-app">
-  <input
-    bind:this={fallbackColorInput}
-    type="color"
-    value={getActiveColorValue()}
-    on:input={onStudioColorInput}
-    class="native-color-proxy"
-    aria-hidden="true"
-    tabindex="-1"
-  />
-  {#if isScanning}
+{#if currentView === 'studio'}
+  <main class="mobile-app">
+    <input
+      bind:this={fallbackColorInput}
+      type="color"
+      value={getActiveColorValue()}
+      on:input={onStudioColorInput}
+      class="native-color-proxy"
+      aria-hidden="true"
+      tabindex="-1"
+    />
+    {#if isScanning}
     <div class="scanner-overlay">
       <div class="scanner-header">
         <h2>SCANNING...</h2>
@@ -2118,9 +3268,9 @@
     </div>
   {:else}
     
-    {#if showDogTagWarning}
-      <div class="custom-modal-overlay">
-        <div class="custom-modal warning-modal">
+  {#if showDogTagWarning}
+    <div class="custom-modal-overlay">
+      <div class="custom-modal warning-modal">
           <div class="modal-kicker">Legal warning</div>
           <h3>Generate Without Microchip?</h3>
           <p>Microchipping is legally required for all dogs in Ireland.</p>
@@ -2129,11 +3279,91 @@
             <button class="modal-btn outline" on:click={() => showDogTagWarning = false}>Cancel</button>
             <button class="modal-btn danger" on:click={runGeneration}>Proceed Anyway</button>
           </div>
-        </div>
       </div>
-    {/if}
+    </div>
+  {/if}
 
-    {#if showCropModal}
+  {#if showScanDecryptModal}
+    <div class="custom-modal-overlay">
+      <div class="custom-modal decrypt-modal">
+        <span class="modal-kicker">Encrypted QR</span>
+        <h3>Unlock Payload</h3>
+        {#if getPayloadAlgorithmLabel(scanEncryptedPayload)}
+          <div class="crypto-meta">Algorithm: {getPayloadAlgorithmLabel(scanEncryptedPayload)}</div>
+        {/if}
+        <p>Enter the passphrase to decrypt this QR locally.</p>
+        <div class="passphrase-field modal-passphrase">
+          <input
+            type={showScanDecryptPassphrase ? "text" : "password"}
+            bind:value={scanDecryptPassphrase}
+            placeholder="Passphrase"
+            autocomplete="current-password"
+            on:keydown={(event) => {
+              if (event.key === "Enter") decryptScannedEncryptedQr();
+              if (event.key === "Escape") closeScanDecryptModal();
+            }}
+          />
+          <button type="button" class="reveal-btn" on:click={() => showScanDecryptPassphrase = !showScanDecryptPassphrase}>
+            {showScanDecryptPassphrase ? "Hide" : "Show"}
+          </button>
+        </div>
+        {#if scanDecryptError}
+          <p class="modal-error">{scanDecryptError}</p>
+        {/if}
+        {#if scanDecryptedPlaintext && showScanDecryptSuccessBanner}
+          <div class="modal-success">
+            <span>✓</span>
+            <strong>Decrypted</strong>
+            <button
+              class="modal-success-dismiss"
+              type="button"
+              aria-label="Dismiss decrypted banner"
+              title="Dismiss"
+              on:click={hideScanDecryptSuccessBanner}
+            >
+              x
+            </button>
+          </div>
+        {/if}
+        {#if scanDecryptedPlaintext}
+          <div class={`forensic-date ${scanDecryptedForensicDate ? "verified" : "missing"}`}>
+            {scanDecryptedForensicDate
+              ? `Verified forensic date: ${scanDecryptedForensicDate}`
+              : "No forensic date found in this encrypted payload"}
+          </div>
+          <div class="decrypted-output modal-decrypted">{scanDecryptedPlaintext}</div>
+        {/if}
+        <div class="modal-actions">
+          <button class="modal-btn outline" type="button" on:click={closeScanDecryptModal}>Close</button>
+          {#if scanDecryptedPlaintext && canOpenResult(scanDecryptedPlaintext)}
+            <button class="modal-btn primary-modal" type="button" on:click={() => openLink(scanDecryptedPlaintext)}>Open Link</button>
+          {:else}
+            <button
+              class:danger={!scanDecryptedPlaintext}
+              class:success-action={Boolean(scanDecryptedPlaintext)}
+              class="modal-btn"
+              type="button"
+              disabled={cryptoBusy || Boolean(scanDecryptedPlaintext)}
+              on:click={decryptScannedEncryptedQr}
+            >
+              {cryptoBusy ? "Decrypting..." : scanDecryptedPlaintext ? "Verified" : "Decrypt"}
+            </button>
+          {/if}
+        </div>
+        {#if scanDecryptedPlaintext}
+          <div class="modal-actions single-action">
+            <button class="modal-btn outline copy-plaintext-btn" type="button" on:click={() => copyText(scanDecryptedPlaintext)}>
+              <span class="copy-icon" aria-hidden="true"></span>
+              <span>Copy Plaintext</span>
+            </button>
+            <button class="modal-btn outline" type="button" on:click={retryScanDecryption}>Decrypt Again</button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  {#if showCropModal}
       <div class="custom-modal-overlay">
         <div class="custom-modal crop-modal">
           <h3>📐 Position Logo</h3>
@@ -2192,6 +3422,9 @@
           <p class="pbess">BY CYPHER SHADOWBOURNE</p>
         </div>
       </div>
+      <button class="settings-nav-btn" on:click={() => currentView = 'settings'} title="Settings">
+        ⚙️
+      </button>
     </header>
 
     <div class="scrolling-content">
@@ -2211,6 +3444,9 @@
             {#if scannedResultCanOpen}
               <button class="result-btn primary-btn" on:click={() => openLink(scannedResult)}>OPEN</button>
             {/if}
+            {#if isEncryptedQrPayload(scannedResult)}
+              <button class="result-btn primary-btn" on:click={loadScannedEncryptedPayload}>DECRYPT</button>
+            {/if}
             <button class="result-btn secondary-btn" on:click={() => copyText(scannedResult)}>COPY TEXT</button>
             <button class="result-btn cancel-btn" on:click={() => { scannedResult = ""; scannedFormat = ""; scannedKind = ""; }}>CLEAR</button>
           </div>
@@ -2218,9 +3454,76 @@
       {/if}
 
       <fieldset class="panel">
-        <legend>1. Content Data</legend>
+        <div class="panel-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <legend style="margin-bottom: 0;">1. Content Data</legend>
+          <button class="mini-action" type="button" style="background: var(--accent-gradient); color: white; border: none; padding: 4px 10px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;" on:click={() => showAiMagic = !showAiMagic}>
+            ✨ AI Magic
+          </button>
+          <button class="mini-action" type="button" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;" on:click={() => currentView = 'settings'}>
+            ⚙️ Settings
+          </button>
+        </div>
+
+        {#if showAiMagic}
+          <div class="ai-magic-container" transition:fade>
+            <div class="ai-provider-row">
+              <span class="ai-provider-badge">{getProviderLabel(aiMagicActiveProvider)}</span>
+              <span class="ai-provider-note">Fallbacks use any saved provider keys.</span>
+            </div>
+            <textarea
+              bind:value={aiMagicPrompt}
+              placeholder="Describe the QR code you want... (e.g. 'Cyberpunk theme with neon pink and cyan colors')"
+              rows="3"
+              class="text-area ai-prompt-textarea"
+            ></textarea>
+            <div class="ai-chips">
+              {#each aiExamples as example}
+                <button class="ai-chip" type="button" on:click={() => aiMagicPrompt = example}>
+                  {example}
+                </button>
+              {/each}
+            </div>
+            <label class="ai-force-center checkbox-label">
+              <input type="checkbox" bind:checked={aiMagicForceCenterImage} />
+              Force center image prompt
+            </label>
+            {#if aiMagicLastCenterImagePrompt}
+              <div class="ai-center-prompt">
+                <strong>Last center image prompt</strong>
+                <span>{aiMagicLastCenterImagePrompt}</span>
+              </div>
+            {/if}
+            <div class="ai-actions" style="display: flex; gap: 10px;">
+              <button
+                class="wallet-btn ai-generate-btn"
+                type="button"
+                disabled={aiMagicLoading || !aiMagicPrompt}
+                on:click={() => handleAiMagicGenerate(false)}
+              >
+                {aiMagicLoading ? "Applying Magic..." : "Generate ✨"}
+              </button>
+              <button
+                class="wallet-btn ai-generate-btn crazier-btn"
+                type="button"
+                style="background: linear-gradient(135deg, #ff0080, #7928ca); border: none;"
+                disabled={aiMagicLoading || !aiMagicPrompt}
+                on:click={() => handleAiMagicGenerate(true)}
+              >
+                {aiMagicLoading ? "Going Crazy..." : "Make it Crazier! 🚀"}
+              </button>
+            </div>
+            {#if !hasAnyAiProviderKey()}
+              <div class="ai-warning" style="margin-top: 10px; padding: 10px; background: rgba(255, 165, 0, 0.1); border: 1px solid rgba(255, 165, 0, 0.3); border-radius: 8px; color: #ffa500; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+                <span>⚠️</span>
+                <span>No AI provider key is saved. <button style="background: none; border: none; color: #fff; text-decoration: underline; cursor: pointer; padding: 0; font-weight: bold;" on:click={() => currentView = 'settings'}>Add one in Settings</button> for AI Magic.</span>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
         <select bind:value={dataType}>
-          <option value="URL">Standard Link / Text</option>
+          <option value="URL">Standard Link (URL)</option>
+          <option value="Text">Plain Text</option>
           <option value="WiFi">WiFi Network</option>
           <option value="vCard">Contact Card (vCard)</option>
           <option value="Email">Send Email</option>
@@ -2239,7 +3542,9 @@
         </select>
 
         {#if dataType === "URL"}
-          <input type="text" bind:value={qrData} placeholder="Paste Link or Text Here..." />
+          <input type="text" bind:value={qrData} placeholder="https://example.com" />
+        {:else if dataType === "Text"}
+          <textarea bind:value={qrData} placeholder="Type or paste your text here..." rows="3" class="text-area"></textarea>
         {:else if dataType === "WiFi"}
           <input type="text" bind:value={wifiSsid} placeholder="Network Name (SSID)" />
           <input type="password" bind:value={wifiPass} placeholder="Password" />
@@ -2342,26 +3647,229 @@
         {/if}
       </fieldset>
 
+      <fieldset class="panel intelligence-panel">
+        <legend>Studio Intelligence</legend>
+        <div class={`scan-score-card ${currentScannability.className}`}>
+          <div class="scan-score-head">
+            <div>
+              <div class="scan-score-label">Scannability</div>
+              <strong>{currentScannability.label}</strong>
+            </div>
+            <span>{currentScannability.score}%</span>
+          </div>
+          <div class="scan-score-bar">
+            <span style={`width: ${currentScannability.score}%`}></span>
+          </div>
+          <p>{currentScannability.notes[0]}</p>
+        </div>
+
+        <div class="sub-panel">
+          <div class="field-head">
+            <p class="sub-label">Templates</p>
+            <button class="mini-action" type="button" on:click={saveCurrentTemplate}>Save</button>
+          </div>
+          <input type="text" bind:value={templateName} placeholder="Template name" />
+          {#if savedTemplates.length}
+            <div class="compact-list">
+              {#each savedTemplates as template (template.id)}
+                <div class="compact-card">
+                  <div>
+                    <strong>{template.name}</strong>
+                    <span>{template.kind === "batch" || getTemplateBatchLines(template).length ? "Batch" : "Template"} · {template.createdAt}</span>
+                  </div>
+                  <div class="compact-actions">
+                    <button class="mini-action" type="button" on:click={() => loadTemplate(template)}>Load</button>
+                    <button class="mini-action danger-mini" type="button" on:click={() => deleteTemplate(template.id)}>Delete</button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="sub-panel">
+          <div class="field-head">
+            <p class="sub-label">Batch Generation</p>
+            <span class="batch-count">{getBatchLines().length}/50</span>
+          </div>
+          <textarea
+            bind:value={batchInput}
+            rows="4"
+            class="text-area"
+            placeholder="One QR payload per line (URLs, text, etc)..."
+          ></textarea>
+          <div class="row split mb-10" style="position: relative;">
+            <button class="wallet-btn batch-btn" type="button" style="flex: 2; overflow: hidden;" disabled={batchBusy} on:click={generateBatch}>
+              {#if batchBusy}
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill" style={`width: ${(batchProgress / batchTotal) * 100}%`}></div>
+                </div>
+                <span style="position: relative; z-index: 1;">{batchProgress}/{batchTotal} Generating...</span>
+              {:else}
+                Generate Batch
+              {/if}
+            </button>
+            <button class="mini-action danger-mini" type="button" style="height: 44px; border-radius: 10px;" on:click={() => batchInput = ""}>Clear</button>
+          </div>
+          <button class="wallet-btn batch-template-btn" type="button" on:click={saveCurrentBatchTemplate}>
+            Save Batch Template
+          </button>
+          {#if batchResults.length}
+            <div class="field-head mt-10">
+              <p class="sub-label" style="margin-bottom: 0;">Results ({batchResults.length})</p>
+              <div style="display: flex; gap: 8px;">
+                <button class="mini-action" type="button" on:click={saveAllBatchAsZip}>Save All (ZIP)</button>
+                <button class="mini-action" type="button" on:click={clearBatchResults}>Clear Results</button>
+              </div>
+            </div>
+            <div class="batch-grid">
+              {#each batchResults as item, i (item.id)}
+                <div 
+                  class="batch-card"
+                  in:scale={{ duration: 400, delay: Math.min(i * 30, 600), easing: cubicOut, start: 0.8 }}
+                >
+                  <img src={item.image} alt={`${item.label} QR`} />
+                  <div class="batch-card-copy">
+                    <strong>{item.label}</strong>
+                    <span>{item.score}%</span>
+                  </div>
+                  <div class="compact-actions">
+                    <button class="mini-action" type="button" on:click={() => loadBatchResult(item)}>Load</button>
+                    <button class="mini-action" type="button" on:click={() => saveBatchResult(item)}>Save</button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </fieldset>
+
+      <fieldset class="panel crypto-panel">
+        <legend>Encrypt / Decrypt</legend>
+
+        <div class="sub-panel crypto-tool">
+          <div class="field-head">
+            <p class="sub-label">Encrypt</p>
+            <button class="help-dot" type="button" title={`Uses Argon2id for key derivation, then ${encryptionAlgorithm === "aes-256-gcm" ? "AES-256-GCM" : "ChaCha20-Poly1305"} for authenticated encryption.`}>?</button>
+          </div>
+          <textarea
+            bind:value={encryptPlaintext}
+            placeholder="Plaintext to protect..."
+            rows="3"
+            class="text-area"
+            autocomplete="off"
+          ></textarea>
+          <div class="passphrase-field">
+            <input
+              type={showEncryptPassphrase ? "text" : "password"}
+              bind:value={encryptPassphrase}
+              placeholder="Passphrase"
+              autocomplete="new-password"
+            />
+            <button type="button" class="reveal-btn" on:click={() => showEncryptPassphrase = !showEncryptPassphrase} title={showEncryptPassphrase ? "Hide passphrase" : "Show passphrase"}>
+              {showEncryptPassphrase ? "Hide" : "Show"}
+            </button>
+          </div>
+          <div class={`strength-meter ${encryptStrength.className}`}>
+            <span style={`width: ${encryptStrength.percent}%`}></span>
+            <strong>{encryptStrength.label}</strong>
+          </div>
+          <div class="algorithm-toggle" role="group" aria-label="Encryption algorithm">
+            <button
+              class:active={encryptionAlgorithm === "chacha20-poly1305"}
+              type="button"
+              on:click={() => encryptionAlgorithm = "chacha20-poly1305"}
+            >
+              ChaCha20
+            </button>
+            <button
+              class:active={encryptionAlgorithm === "aes-256-gcm"}
+              type="button"
+              on:click={() => encryptionAlgorithm = "aes-256-gcm"}
+            >
+              AES-256-GCM
+            </button>
+            <button class="help-dot algorithm-help" type="button" title="Both modes are standard authenticated encryption. AES-256-GCM is widely accelerated on many CPUs; ChaCha20-Poly1305 is a strong default on mobile and general devices.">?</button>
+          </div>
+          <button class="wallet-btn crypto-action-btn" type="button" disabled={cryptoBusy} on:click={encryptPlaintextForQr}>
+            ENCRYPT & GENERATE QR
+          </button>
+          {#if encryptedPayload}
+            <div class="forensic-date">Forensic date: {encryptedForensicDate}</div>
+            <div class="encrypted-output">{encryptedPayload}</div>
+            <div class="result-actions">
+              <button class="result-btn secondary-btn" type="button" on:click={() => copyText(encryptedPayload)}>COPY PAYLOAD</button>
+              <button class="result-btn primary-btn" type="button" on:click={() => useEncryptedPayloadForQr(encryptedPayload)}>GENERATE QR</button>
+            </div>
+          {/if}
+        </div>
+
+        <div class="sub-panel crypto-tool">
+          <div class="field-head">
+            <p class="sub-label">Decrypt</p>
+            <button class="help-dot" type="button" title="Paste or scan a QRU1 payload. The app reads the algorithm from the payload and decrypts locally.">?</button>
+          </div>
+          <textarea
+            bind:value={decryptPayload}
+            placeholder="Paste encrypted QR payload..."
+            rows="3"
+            class="text-area"
+            autocomplete="off"
+          ></textarea>
+          <div class="passphrase-field">
+            <input
+              type={showDecryptPassphrase ? "text" : "password"}
+              bind:value={decryptPassphrase}
+              placeholder="Passphrase"
+              autocomplete="current-password"
+            />
+            <button type="button" class="reveal-btn" on:click={() => showDecryptPassphrase = !showDecryptPassphrase} title={showDecryptPassphrase ? "Hide passphrase" : "Show passphrase"}>
+              {showDecryptPassphrase ? "Hide" : "Show"}
+            </button>
+          </div>
+          <button class="wallet-btn crypto-action-btn" type="button" disabled={cryptoBusy} on:click={decryptEncryptedQrPayload}>
+            DECRYPT PAYLOAD
+          </button>
+          {#if decryptedPlaintext}
+            <div class={`forensic-date ${decryptedForensicDate ? "verified" : "missing"}`}>
+              {decryptedForensicDate
+                ? `Verified forensic date: ${decryptedForensicDate}`
+                : "No forensic date found in this encrypted payload"}
+            </div>
+            <div class="decrypted-output">{decryptedPlaintext}</div>
+            <div class="result-actions">
+              <button class="result-btn secondary-btn" type="button" on:click={() => copyText(decryptedPlaintext)}>COPY TEXT</button>
+            </div>
+          {/if}
+        </div>
+      </fieldset>
+
       <fieldset class="panel">
         <legend>2. Body & Colors</legend>
         <div class="row split mb-10">
-          <select bind:value={bgShape} class="full-width outline-select">
-            <option value="square">Outer: Square</option>
-            <option value="circle">Outer: Round Sticker</option>
-            <option value="rounded">Outer: Rounded Square</option>
-          </select>
+          <label class="select-field full-width">Outer Shape
+            <select bind:value={bgShape} class="outline-select">
+              <option value="square">Square</option>
+              <option value="circle">Round Sticker</option>
+              <option value="rounded">Rounded Square</option>
+            </select>
+          </label>
         </div>
 
         <div class="row split">
-          <select bind:value={mainShape}>
-            <option value="square">Square Blocks</option>
-            <option value="circle">Dots (Circles)</option>
-            <option value="rounded">Rounded Blocks</option>
-          </select>
-          <select bind:value={fillType}>
-            <option value="Solid">Solid Color</option>
-            <option value="Linear">Gradient</option>
-          </select>
+          <label class="select-field">Inner Block Style
+            <select bind:value={mainShape}>
+              <option value="square">Square Blocks</option>
+              <option value="circle">Dots (Circles)</option>
+              <option value="rounded">Rounded Blocks</option>
+            </select>
+          </label>
+          <label class="select-field">Fill Mode
+            <select bind:value={fillType}>
+              <option value="Solid">Solid Color</option>
+              <option value="Linear">Gradient</option>
+            </select>
+          </label>
         </div>
         
         <div class="row split color-row mt-10">
@@ -2417,11 +3925,13 @@
 
       <fieldset class="panel">
         <legend>3. Finder Patterns (Eyes)</legend>
-        <select bind:value={eyeShape} class="full-width">
-          <option value="square">Square Eyes</option>
-          <option value="circle">Circular Eyes</option>
-          <option value="rounded">Rounded Eyes</option>
-        </select>
+        <label class="select-field full-width">Eye Style
+          <select bind:value={eyeShape}>
+            <option value="square">Square Eyes</option>
+            <option value="circle">Circular Eyes</option>
+            <option value="rounded">Rounded Eyes</option>
+          </select>
+        </label>
         <div class="row split color-row mt-10">
           <label>Outer
             <input type="color" bind:value={eyeOut} />
@@ -2526,17 +4036,19 @@
           </div>
         </div>
         <div class="row split mt-10">
-          <select bind:value={ringStyle} disabled={!enableFrame} class="full-width">
-            <option value="none">No Ring (Overlay Only)</option>
-            <option value="solid">Solid Ring</option>
-            <option value="double">Double Ring</option>
-            <option value="dotted">Dotted Ring (Dots)</option>
-            <option value="dashed">Dashed Ring</option>
-            <option value="rounded">Rounded Ring</option>
-            <option value="diamond">Diamond Ring</option>
-            <option value="gradient">Gradient Ring</option>
-            <option value="neon">Neon Glow Ring</option>
-          </select>
+          <label class="select-field full-width">Outer Ring Style
+            <select bind:value={ringStyle} disabled={!enableFrame}>
+              <option value="none">No Ring (Overlay Only)</option>
+              <option value="solid">Solid Ring</option>
+              <option value="double">Double Ring</option>
+              <option value="dotted">Dotted Ring (Dots)</option>
+              <option value="dashed">Dashed Ring</option>
+              <option value="rounded">Rounded Ring</option>
+              <option value="diamond">Diamond Ring</option>
+              <option value="gradient">Gradient Ring</option>
+              <option value="neon">Neon Glow Ring</option>
+            </select>
+          </label>
         </div>
         <div class="row split color-row mt-10">
           <label>Ring
@@ -2552,14 +4064,18 @@
         </div>
         <div class="sub-panel mt-10">
           <p class="sub-label">Overlay Gradient</p>
-          <select bind:value={ringColorMode} disabled={!enableFrame || ringStyle === "none" || ringStyle === "solid"} class="full-width">
-            <option value="solid">Use Solid Ring Color</option>
-            <option value="gradient">Use Gradient Colors</option>
-          </select>
-          <select bind:value={ringGradientMode} disabled={!enableFrame || ringStyle === "none" || ringStyle === "solid" || ringColorMode !== "gradient"} class="full-width mt-10">
-            <option value="match-main">Match Main QR Gradient</option>
-            <option value="custom">Custom Overlay Gradient</option>
-          </select>
+          <label class="select-field full-width">Outer Ring Fill
+            <select bind:value={ringColorMode} disabled={!enableFrame || ringStyle === "none" || ringStyle === "solid"}>
+              <option value="solid">Use Solid Ring Color</option>
+              <option value="gradient">Use Gradient Colors</option>
+            </select>
+          </label>
+          <label class="select-field full-width mt-10">Outer Gradient Source
+            <select bind:value={ringGradientMode} disabled={!enableFrame || ringStyle === "none" || ringStyle === "solid" || ringColorMode !== "gradient"}>
+              <option value="match-main">Match Main QR Gradient</option>
+              <option value="custom">Custom Overlay Gradient</option>
+            </select>
+          </label>
           {#if ringStyle !== "none" && ringStyle !== "solid" && ringColorMode === "gradient" && ringGradientMode === "custom"}
             <div class="row split color-row mt-10">
               <label>Main
@@ -2606,6 +4122,9 @@
             <input type="range" min="10" max="36" step="1" bind:value={logoSizePercent} disabled={!logoBase64} />
             <span class="range-value">{logoSizePercent}%</span>
           </label>
+          <div class="logo-safety-meter {logoSizePercent <= 24 ? 'safe' : logoSizePercent <= 30 ? 'warning' : 'danger'}">
+            <span style="width: {(logoSizePercent / 36) * 100}%"></span>
+          </div>
           <label class="mt-10">
             Opacity
             <input type="range" min="15" max="100" step="1" bind:value={logoOpacityPercent} disabled={!logoBase64} />
@@ -2615,33 +4134,41 @@
         </div>
         <div class="sub-panel mt-10">
           <p class="sub-label">Center Photo Overlay</p>
-          <select bind:value={centerOverlayMode} class="full-width" disabled={!logoBase64}>
-            <option value="none">No Inner Overlay</option>
-            <option value="match" disabled={!enableFrame}>Match Outer Overlay</option>
-            <option value="custom">Custom Inner Overlay</option>
-          </select>
+          <label class="select-field full-width">Inner Overlay Mode
+            <select bind:value={centerOverlayMode} disabled={!logoBase64}>
+              <option value="none">No Inner Overlay</option>
+              <option value="match" disabled={!enableFrame}>Match Outer Overlay</option>
+              <option value="custom">Custom Inner Overlay</option>
+            </select>
+          </label>
           {#if centerOverlayMode === "custom"}
             <div class="row split mt-10">
-              <select bind:value={centerOverlayStyle} class="full-width" disabled={!logoBase64}>
-                <option value="solid">Solid Ring</option>
-                <option value="double">Double Ring</option>
-                <option value="dotted">Dotted Ring</option>
-                <option value="dashed">Dashed Ring</option>
-                <option value="rounded">Rounded Ring</option>
-                <option value="diamond">Diamond Ring</option>
-                <option value="gradient">Gradient Ring</option>
-                <option value="neon">Neon Glow Ring</option>
-              </select>
+              <label class="select-field full-width">Inner Ring Style
+                <select bind:value={centerOverlayStyle} disabled={!logoBase64}>
+                  <option value="solid">Solid Ring</option>
+                  <option value="double">Double Ring</option>
+                  <option value="dotted">Dotted Ring</option>
+                  <option value="dashed">Dashed Ring</option>
+                  <option value="rounded">Rounded Ring</option>
+                  <option value="diamond">Diamond Ring</option>
+                  <option value="gradient">Gradient Ring</option>
+                  <option value="neon">Neon Glow Ring</option>
+                </select>
+              </label>
             </div>
-            <select bind:value={centerOverlayColorMode} class="full-width mt-10" disabled={!logoBase64 || centerOverlayStyle === "none" || centerOverlayStyle === "solid"}>
-              <option value="solid">Use Solid Inner Color</option>
-              <option value="gradient">Use Gradient Colors</option>
-            </select>
-            <select bind:value={centerOverlayGradientMode} class="full-width mt-10" disabled={!logoBase64 || centerOverlayStyle === "none" || centerOverlayStyle === "solid" || centerOverlayColorMode !== "gradient"}>
-              <option value="match-outer">Match Outer Overlay</option>
-              <option value="match-main">Match Main QR Gradient</option>
-              <option value="custom">Custom Inner Gradient</option>
-            </select>
+            <label class="select-field full-width mt-10">Inner Ring Fill
+              <select bind:value={centerOverlayColorMode} disabled={!logoBase64 || centerOverlayStyle === "none" || centerOverlayStyle === "solid"}>
+                <option value="solid">Use Solid Inner Color</option>
+                <option value="gradient">Use Gradient Colors</option>
+              </select>
+            </label>
+            <label class="select-field full-width mt-10">Inner Gradient Source
+              <select bind:value={centerOverlayGradientMode} disabled={!logoBase64 || centerOverlayStyle === "none" || centerOverlayStyle === "solid" || centerOverlayColorMode !== "gradient"}>
+                <option value="match-outer">Match Outer Overlay</option>
+                <option value="match-main">Match Main QR Gradient</option>
+                <option value="custom">Custom Inner Gradient</option>
+              </select>
+            </label>
             {#if centerOverlayStyle === "solid" || centerOverlayColorMode === "solid" || centerOverlayGradientMode === "custom"}
               <div class="row split color-row mt-10">
                 <label>Inner Ring <input type="color" bind:value={centerOverlayColor} disabled={!logoBase64}/> <input type="text" bind:value={centerOverlayColor} class="hex-input" on:blur={(event) => onHexBlur('centerOverlayColor', event)} disabled={!logoBase64}/> <button class="mini-color-btn" type="button" on:click={() => pickColorInto('centerOverlayColor')} disabled={!logoBase64}>Pick</button></label>
@@ -2686,12 +4213,25 @@
         <button class="save-btn secondary-action" on:click={printCode} disabled={!qrImagePng}>
           PRINT CODE
         </button>
+        <button class="save-btn secondary-action history-toggle-btn" type="button" on:click={() => showHistoryPanel = !showHistoryPanel}>
+          HISTORY {generationHistory.length ? `(${generationHistory.length})` : ""}
+        </button>
         {#if isNativeMobileDevice()}
           <p class="save-hint">Android saves straight to <strong>Gallery/Photos</strong> in <strong>Pictures/QR Studio Ultra</strong>.</p>
         {/if}
         {#if showSaveToast}
-          <div class={`save-toast ${saveToastTone}`}>
-            <span class="save-toast-dot"></span>
+          <div 
+            class={`save-toast ${saveToastTone}`}
+            in:fly={{ y: 20, duration: 400, easing: backOut }}
+            out:fade={{ duration: 300 }}
+          >
+            {#if saveToastTone === 'success'}
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            {:else if saveToastTone === 'error'}
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            {:else}
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            {/if}
             <span>{mobileSaveMessage}</span>
           </div>
         {/if}
@@ -2724,11 +4264,57 @@
             {/each}
           </div>
         {/if}
+        {#if showHistoryPanel}
+          <div class="history-panel" transition:fly={{ x: 20, duration: 300, easing: cubicOut }}>
+            <div class="field-head">
+              <div class="recent-saves-head">History</div>
+              <button class="mini-action danger-mini" type="button" on:click={clearHistory} disabled={!generationHistory.length}>Clear</button>
+            </div>
+            {#if generationHistory.length}
+              <div class="compact-list">
+                {#each generationHistory as entry, i (entry.id)}
+                  <div 
+                    class="compact-card history-card"
+                    in:fly={{ y: 10, duration: 300, delay: Math.min(i * 20, 400) }}
+                  >
+                    <div>
+                      <strong>{entry.label}</strong>
+                      <span>{entry.createdAt} · {entry.dataType} · {entry.score}%</span>
+                    </div>
+                    <div class="compact-actions">
+                      <button class="mini-action" type="button" on:click={() => loadHistoryEntry(entry)}>Load</button>
+                      <button class="mini-action" type="button" on:click={() => copyText(entry.payload)}>Copy</button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="empty-history">Generated QR codes will appear here.</p>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       {#if qrImagePng}
         <div class="preview-area">
           <img src={qrImagePng} alt="QR Preview" />
+          <div class={`scan-score-card preview-score ${currentScannability.className}`}>
+            <div class="scan-score-head">
+              <div>
+                <div class="scan-score-label">Real-Time Scannability</div>
+                <strong>{currentScannability.label}</strong>
+              </div>
+              <span>{currentScannability.score}%</span>
+            </div>
+            <div class="scan-score-bar">
+              <span style={`width: ${currentScannability.score}%`}></span>
+            </div>
+          </div>
+          <div class="quick-export-row">
+            <button class="mini-action" type="button" on:click={() => quickSave("png")}>Download PNG</button>
+            <button class="mini-action" type="button" on:click={() => quickSave("svg")}>Download SVG</button>
+            <button class="mini-action" type="button" on:click={copySvg}>Copy SVG</button>
+          </div>
           <div class="sub-panel print-title-panel">
             <p class="sub-label">Print Title</p>
             <input
@@ -2759,6 +4345,111 @@
 </main>
 
 <style>
+  .ai-magic-container {
+    margin-bottom: 1rem;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .ai-prompt-textarea {
+    width: 100%;
+    margin-bottom: 0.8rem;
+    font-size: 0.95rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .ai-provider-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ai-provider-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(33, 212, 253, 0.26);
+    border-radius: 999px;
+    padding: 5px 10px;
+    background: rgba(33, 212, 253, 0.1);
+    color: #c8f6ff;
+    font-size: 0.75rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .ai-provider-note {
+    color: #91a3b8;
+    font-size: 0.75rem;
+    text-align: right;
+  }
+  .ai-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+  .ai-chip {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    color: #ddd;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ai-chip:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+  .ai-force-center {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(33, 212, 253, 0.08);
+    border: 1px solid rgba(33, 212, 253, 0.2);
+    color: #dffaff;
+  }
+  .ai-center-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.22);
+    color: #efe7ff;
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+  .ai-center-prompt strong {
+    color: #ffffff;
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .ai-generate-btn {
+    width: 100%;
+    background: var(--accent-gradient);
+    color: white;
+    font-weight: bold;
+    font-size: 1rem;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .ai-generate-btn:active {
+    transform: scale(0.98);
+  }
+  .ai-generate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
   :global(body) { 
     background-color: #0F0F12; 
     color: #e0e0e0; 
@@ -2806,8 +4497,109 @@
   .warning-modal h3 { color: #ffd3bf; }
   .modal-actions { display: flex; gap: 10px; justify-content: space-between; }
   .modal-btn { flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; border: none; }
+  .modal-btn:disabled { opacity: 0.55; cursor: not-allowed; }
   .modal-btn.outline { background: transparent; color: #aaa; border: 1px solid #555; }
   .modal-btn.danger { background: linear-gradient(135deg, #ff1a92 0%, #ff4b2b 100%); color: white; }
+  .modal-btn.success-action { background: linear-gradient(135deg, #0faa73 0%, #52e6ad 100%); color: #03120c; opacity: 1; }
+  .modal-btn.primary-modal { background: linear-gradient(135deg, #00c48c 0%, #21d4fd 100%); color: #061016; }
+  .single-action { margin-top: 10px; }
+  .decrypt-modal { border-color: rgba(33, 212, 253, 0.58); }
+  .decrypt-modal h3 { color: #a9f1ff; }
+  .crypto-meta {
+    display: inline-flex;
+    margin: -2px 0 12px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(33, 212, 253, 0.08);
+    border: 1px solid rgba(33, 212, 253, 0.2);
+    color: #a7eafd;
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+  .modal-passphrase { margin-bottom: 12px; text-align: left; }
+  .modal-error {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(156, 42, 42, 0.26);
+    border: 1px solid rgba(255, 108, 108, 0.32);
+    color: #ffd3d3 !important;
+    font-size: 0.9rem !important;
+  }
+  .modal-success {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(20, 132, 91, 0.24);
+    border: 1px solid rgba(76, 225, 166, 0.34);
+    color: #dfffee;
+  }
+  .modal-success-dismiss {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: #c9ffe9;
+    cursor: pointer;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .modal-success span {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1fd196;
+    color: #04140d;
+    font-weight: 900;
+  }
+  .modal-decrypted {
+    margin-bottom: 12px;
+    text-align: left;
+    max-height: 160px;
+    overflow: auto;
+  }
+  .copy-plaintext-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .copy-icon {
+    position: relative;
+    width: 14px;
+    height: 16px;
+    flex: 0 0 auto;
+  }
+  .copy-icon::before,
+  .copy-icon::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 12px;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+  }
+  .copy-icon::before {
+    left: 0;
+    top: 3px;
+    opacity: 0.5;
+  }
+  .copy-icon::after {
+    right: 0;
+    top: 0;
+    background: rgba(255, 255, 255, 0.03);
+  }
 
   /* CROP MODAL STYLING */
   .crop-modal { max-width: 500px; border-color: #21d4fd; box-shadow: 0 10px 30px rgba(33, 212, 253, 0.2); }
@@ -2876,6 +4668,45 @@
 
   input[type="text"], input[type="password"], select, .text-area { width: 100%; background-color: #24242C; border: 1px solid #3A3A45; color: #fff; padding: 14px; border-radius: 8px; box-sizing: border-box; margin-bottom: 10px; font-size: 1rem; font-family: inherit; }
   .outline-select { background-color: #18181F; border: 1px dashed #444; color: #21d4fd; font-weight: bold; }
+  .select-field {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 6px;
+    color: #9aa7b7;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .select-field select {
+    margin-bottom: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .logo-safety-meter {
+    position: relative;
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #0b1016;
+    border: 1px solid #283746;
+    margin-top: 8px;
+    margin-bottom: 4px;
+  }
+  .logo-safety-meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    transition: width 180ms ease, background-color 180ms ease;
+  }
+  .logo-safety-meter.safe span { background: #168a64; }
+  .logo-safety-meter.warning span { background: #b8892f; }
+  .logo-safety-meter.danger span { background: #a83c3c; }
+
   .text-area { resize: vertical; }
   input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -2897,9 +4728,261 @@
   .sub-panel { background-color: #111115; border-radius: 8px; padding: 12px; margin-top: 15px; }
   .sub-label { font-size: 0.8rem; color: #888; margin: 0 0 10px 0; }
   .sub-note { margin: 10px 0 0 0; color: #93a4b8; font-size: 0.84rem; line-height: 1.4; }
+  .intelligence-panel { border-color: rgba(156, 227, 194, 0.42); }
+  .scan-score-card {
+    padding: 13px;
+    border-radius: 8px;
+    background: #0d1117;
+    border: 1px solid #263848;
+  }
+  .scan-score-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .scan-score-head strong {
+    display: block;
+    color: #f7fbff;
+    font-size: 1.05rem;
+  }
+  .scan-score-head > span {
+    color: #ffffff;
+    font-size: 1.25rem;
+    font-weight: 900;
+  }
+  .scan-score-label {
+    color: #8fa4b9;
+    font-size: 0.74rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .scan-score-bar {
+    height: 9px;
+    margin-top: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #06090d;
+    border: 1px solid #22303d;
+  }
+  .scan-score-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    transition: width 180ms ease;
+  }
+  .scan-score-card p {
+    margin: 9px 0 0;
+    color: #a8b8c8;
+    font-size: 0.84rem;
+    line-height: 1.35;
+  }
+  .scan-score-card.strong .scan-score-bar span { background: #16a66f; }
+  .scan-score-card.good .scan-score-bar span { background: #9fb943; }
+  .scan-score-card.warning .scan-score-bar span { background: #c8902f; }
+  .scan-score-card.danger .scan-score-bar span { background: #bd4545; }
+  .scan-score-card.empty .scan-score-bar span { background: transparent; }
+  .preview-score {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .compact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .compact-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #0d1117;
+    border: 1px solid #243446;
+  }
+  .compact-card div:first-child {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .compact-card strong {
+    color: #f2f7fb;
+    font-size: 0.9rem;
+    word-break: break-word;
+  }
+  .compact-card span {
+    color: #8ea0b7;
+    font-size: 0.78rem;
+  }
+  .compact-actions {
+    display: flex;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+  .danger-mini {
+    background: rgba(95, 36, 44, 0.72) !important;
+    color: #ffd7dc !important;
+  }
+  .mini-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .batch-count {
+    color: #9ce3c2;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+  .batch-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #155f7d 0%, #1ba784 100%);
+    border-color: transparent;
+  }
+  .batch-template-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #2d3c56 0%, #284f63 100%);
+    border-color: #3a6074;
+  }
+  .batch-btn:disabled {
+    opacity: 0.56;
+    cursor: not-allowed;
+  }
+  .batch-template-btn:disabled {
+    opacity: 0.56;
+    cursor: not-allowed;
+  }
+  .batch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .batch-card {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    background: #0b1016;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .batch-card:hover {
+    border-color: rgba(56, 189, 248, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    background: #151c24;
+  }
+  .batch-card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    border-radius: 6px;
+    background: #ffffff;
+    transition: transform 0.3s ease;
+  }
+  .batch-card:hover img {
+    transform: scale(1.02);
+  }
+  .batch-card-copy {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: #dfefff;
+    font-size: 0.82rem;
+  }
+  .batch-card-copy span {
+    color: #9ce3c2;
+    flex: 0 0 auto;
+  }
+  .history-panel {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(17, 17, 21, 0.88);
+    border: 1px solid #2b3a49;
+  }
+  .history-toggle-btn {
+    border: 1px solid #36506b;
+    background: linear-gradient(135deg, #1b3143 0%, #17202b 100%);
+  }
+  .history-card strong {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .empty-history {
+    margin: 10px 0 0;
+    color: #8ea0b7;
+    font-size: 0.9rem;
+    text-align: center;
+  }
   .wallet-row { align-items: stretch; }
   .wallet-toolbar { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-  .wallet-btn { border: 1px solid #35506b; background: #1d2d3d; color: #fff; padding: 10px 14px; border-radius: 10px; font-weight: 800; cursor: pointer; }
+  .wallet-btn { 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    background: linear-gradient(135deg, #2a3a4a 0%, #1d2d3d 100%);
+    color: #fff; 
+    padding: 10px 14px; 
+    border-radius: 12px; 
+    cursor: pointer; 
+    font-size: 0.94rem; 
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  .wallet-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #354a5e 0%, #253748 100%);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  }
+  .wallet-btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .progress-bar-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1ba784 0%, #38bdf8 100%);
+    transition: width 0.3s ease-out;
+  }
+  .mini-action {
+    background: #2b3440;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  .mini-action:hover:not(:disabled) {
+    background: #3a4555;
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .mini-action:active:not(:disabled) {
+    transform: scale(0.96);
+  }
   .wallet-save-btn { background: linear-gradient(135deg, #154b7d 0%, #1ba784 100%); border-color: transparent; }
   .wallet-delete-btn { background: #3c2024; border-color: #6a3038; }
   .wallet-payload-preview { background: #10141a; border: 1px dashed #36506b; color: #90e0ff; border-radius: 10px; padding: 12px; font-family: monospace; font-size: 0.8rem; word-break: break-all; }
@@ -2908,6 +4991,135 @@
   .wallet-card-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .wallet-meta { font-size: 0.8rem; color: #95a8bc; word-break: break-all; }
   .wallet-card-actions { display: flex; gap: 8px; }
+  .crypto-panel { border-color: #21d4fd; }
+  .crypto-tool { display: flex; flex-direction: column; gap: 10px; }
+  .field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .field-head .sub-label { margin-bottom: 0; }
+  .help-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid #345365;
+    background: #111a22;
+    color: #8fe8ff;
+    font-weight: 900;
+    cursor: help;
+    flex: 0 0 auto;
+  }
+  .passphrase-field {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .passphrase-field input { margin-bottom: 0; }
+  .reveal-btn {
+    min-width: 68px;
+    border: 1px solid #34485a;
+    border-radius: 8px;
+    background: #1a2530;
+    color: #d9f5ff;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .strength-meter {
+    position: relative;
+    height: 22px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #0b1016;
+    border: 1px solid #283746;
+  }
+  .strength-meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    transition: width 180ms ease;
+  }
+  .strength-meter strong {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f5fbff;
+  }
+  .strength-meter.empty span { background: transparent; }
+  .strength-meter.weak span { background: #a83c3c; }
+  .strength-meter.good span { background: #b8892f; }
+  .strength-meter.strong span { background: #168a64; }
+  .algorithm-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 6px;
+    padding: 4px;
+    background: #0d1117;
+    border: 1px solid #263848;
+    border-radius: 8px;
+  }
+  .algorithm-toggle button {
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #9fb6c8;
+    padding: 10px 8px;
+    font-weight: 900;
+    cursor: pointer;
+    opacity: 0.62;
+  }
+  .algorithm-toggle button.active {
+    background: linear-gradient(135deg, #176b87 0%, #21d4fd 100%);
+    color: #ffffff;
+    opacity: 1;
+  }
+  .algorithm-toggle .algorithm-help {
+    width: 34px;
+    height: auto;
+    border-radius: 6px;
+    padding: 0;
+    opacity: 1;
+  }
+  .crypto-action-btn { width: 100%; background: linear-gradient(135deg, #116466 0%, #21d4fd 100%); border-color: transparent; }
+  .crypto-action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .encrypted-output,
+  .decrypted-output {
+    background: #080c11;
+    border: 1px dashed #315e6d;
+    color: #dffaff;
+    border-radius: 10px;
+    padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+  .forensic-date {
+    margin-top: 10px;
+    color: #9ce3c2;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+  .forensic-date.verified {
+    color: #9ce3c2;
+  }
+  .forensic-date.missing {
+    color: #ffd166;
+  }
+  .decrypted-output {
+    border-color: #4c725e;
+    color: #effff4;
+    word-break: break-word;
+  }
   .mini-color-btn { margin-top: 8px; border: 1px solid #42566e; background: #202c39; color: #eef6ff; border-radius: 10px; padding: 8px 11px; font-size: 0.75rem; font-weight: 800; cursor: pointer; }
   .mini-color-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .studio-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -2915,7 +5127,12 @@
   .swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.08); cursor: pointer; }
   
   .preset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .preset-btn { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 13px 10px; color: white; font-size: 0.85rem; font-weight: 900; cursor: pointer; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+  .preset-container { display: flex; flex-direction: column; gap: 4px; }
+  .preset-btn { width: 100%; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 13px 10px; color: white; font-size: 0.85rem; font-weight: 900; cursor: pointer; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+  .reliability-bar { height: 4px; border-radius: 2px; width: 100%; opacity: 0.8; }
+  .reliability-bar.green { background: #168a64; }
+  .reliability-bar.yellow { background: #b8892f; }
+  .reliability-bar.red { background: #a83c3c; }
 
   .checkbox-label { display: flex; align-items: center; gap: 12px; font-size: 1rem; margin-bottom: 12px; color: #eee; }
   .checkbox-label input[type="checkbox"] { width: 20px; height: 20px; }
@@ -2953,8 +5170,29 @@
   }
   .save-btn:disabled { background: #444; color: #888; box-shadow: none; cursor: not-allowed; }
 
-  .preview-area { background-color: transparent; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; margin-top: 10px; }
+  .preview-area { 
+    background-color: transparent; 
+    border-radius: 12px; 
+    padding: 20px; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 20px; 
+    margin-top: 10px;
+    transition: all 0.4s ease;
+    position: relative;
+  }
+  .preview-area.success-glow {
+    box-shadow: 0 0 50px rgba(74, 222, 128, 0.3);
+    transform: scale(1.02);
+  }
   .preview-area img { max-width: 100%; border-radius: 12px; background-color: transparent; }
+  .quick-export-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
   .print-title-panel {
     width: 100%;
     margin-top: 0;
@@ -3019,26 +5257,40 @@
   }
   .save-hint { margin: 0; text-align: center; font-size: 0.9rem; color: #b9c2cf; }
   .save-toast {
-    margin-top: 12px;
-    padding: 12px 14px;
-    border-radius: 16px;
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    padding: 14px 24px;
+    border-radius: 14px;
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 0.95rem;
     display: flex;
     align-items: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    pointer-events: none;
+    max-width: 90vw;
+    text-align: center;
+    justify-content: center;
     gap: 10px;
-    font-size: 0.95rem;
-    animation: save-toast-in 280ms ease-out;
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.24);
   }
-  .save-toast.success { background: linear-gradient(135deg, rgba(28, 88, 52, 0.95), rgba(16, 48, 31, 0.96)); color: #ecfff0; }
-  .save-toast.error { background: linear-gradient(135deg, rgba(119, 31, 31, 0.96), rgba(64, 15, 15, 0.98)); color: #fff0f0; }
-  .save-toast.info { background: linear-gradient(135deg, rgba(29, 54, 92, 0.96), rgba(16, 28, 51, 0.98)); color: #eef5ff; }
-  .save-toast-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: currentColor;
-    box-shadow: 0 0 18px currentColor;
-    flex: 0 0 auto;
+  .save-toast.success { 
+    background: linear-gradient(135deg, rgba(28, 88, 52, 0.9), rgba(16, 48, 31, 0.95)); 
+    border-left: 4px solid #4ade80;
+    color: #ecfff0;
+  }
+  .save-toast.error { 
+    background: linear-gradient(135deg, rgba(119, 31, 31, 0.9), rgba(64, 15, 15, 0.95)); 
+    border-left: 4px solid #f87171;
+    color: #fff0f0;
+  }
+  .save-toast.info { 
+    background: linear-gradient(135deg, rgba(29, 54, 92, 0.9), rgba(16, 28, 51, 0.95)); 
+    border-left: 4px solid #60a5fa;
+    color: #eef5ff;
   }
   .secondary-action {
     background: linear-gradient(135deg, #2b3440 0%, #1c232b 100%);
@@ -3111,20 +5363,49 @@
     100% { top: 12%; }
   }
 
+  .settings-nav-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1.1rem;
+  }
+  .settings-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: rotate(30deg);
+  }
+
   @media (max-width: 520px) {
     .result-actions,
     .row.split,
-    .wallet-card {
+    .wallet-card,
+    .compact-card {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .batch-grid {
+      grid-template-columns: 1fr;
     }
 
     .wallet-card-actions {
       width: 100%;
     }
 
-    .wallet-card-actions .wallet-btn {
+    .wallet-card-actions .wallet-btn,
+    .compact-actions .mini-action {
       flex: 1;
+    }
+
+    .compact-actions {
+      width: 100%;
     }
 
     .scanner-target {
@@ -3167,3 +5448,7 @@
     }
   }
 </style>
+
+{:else if currentView === 'settings'}
+  <Settings onBack={() => currentView = 'studio'} />
+{/if}
