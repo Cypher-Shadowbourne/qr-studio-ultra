@@ -874,12 +874,12 @@
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const rect = cropImgEl.getBoundingClientRect();
-    const uniformScale = Math.min(rect.width / cropImgNaturalW, rect.height / cropImgNaturalH);
-    const inverseScale = 1 / uniformScale;
+    const scaleX = cropImgNaturalW / rect.width;
+    const scaleY = cropImgNaturalH / rect.height;
     
     // Dragging logic inverted so dragging the image feels like panning a map
-    const newX = cropStartX - (clientX - dragStartX) * inverseScale;
-    const newY = cropStartY - (clientY - dragStartY) * inverseScale;
+    const newX = cropStartX - (clientX - dragStartX) * scaleX;
+    const newY = cropStartY - (clientY - dragStartY) * scaleY;
     
     cropX = Math.max(0, Math.min(newX, cropImgNaturalW - cropSize));
     cropY = Math.max(0, Math.min(newY, cropImgNaturalH - cropSize));
@@ -3513,14 +3513,13 @@
             />
             {#if cropImgNaturalW > 0}
               {@const rect = cropImgEl?.getBoundingClientRect()}
-              {@const uniformScale = rect ? Math.min(rect.width / cropImgNaturalW, rect.height / cropImgNaturalH) : 1}
-              {@const offsetX = rect ? (rect.width - cropImgNaturalW * uniformScale) / 2 : 0}
-              {@const offsetY = rect ? (rect.height - cropImgNaturalH * uniformScale) / 2 : 0}
+              {@const scaleX = rect ? rect.width / cropImgNaturalW : 1}
+              {@const scaleY = rect ? rect.height / cropImgNaturalH : 1}
               <div class="crop-box" style="
-                left: {offsetX + cropX * uniformScale}px;
-                top: {offsetY + cropY * uniformScale}px;
-                width: {cropSize * uniformScale}px;
-                height: {cropSize * uniformScale}px;
+                left: {cropX * scaleX}px;
+                top: {cropY * scaleY}px;
+                width: {cropSize * scaleX}px;
+                height: {cropSize * scaleY}px;
               "></div>
             {/if}
           </div>
@@ -4748,15 +4747,14 @@
   }
 
   /* CROP MODAL STYLING */
-  .crop-modal { max-width: 500px; border-color: #21d4fd; box-shadow: 0 10px 30px rgba(33, 212, 253, 0.2); overflow-y: auto; max-height: 90vh; }
+  .crop-modal { max-width: 500px; border-color: #21d4fd; box-shadow: 0 10px 30px rgba(33, 212, 253, 0.2); }
   .crop-modal h3 { color: #21d4fd; }
   .crop-container {
     position: relative; width: 100%; overflow: hidden; border-radius: 8px;
     cursor: grab; user-select: none; touch-action: none;
-    max-height: 45vh;
   }
   .crop-container:active { cursor: grabbing; }
-  .crop-img { width: 100%; display: block; pointer-events: none; object-fit: contain; max-height: 45vh; }
+  .crop-img { width: 100%; display: block; pointer-events: none; }
   .crop-box {
     position: absolute; border: 3px solid #21d4fd; 
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); 
@@ -4868,7 +4866,7 @@
   .native-color-proxy { position: fixed; inset: auto auto -100px -100px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
   .sub-panel { background-color: #111115; border-radius: 8px; padding: 12px; margin-top: 15px; }
-  .crop-adjustments { text-align: left; background-color: #1a1a22; border: 1px solid rgba(33, 212, 253, 0.2); }
+  .crop-adjustments { text-align: left; }
   .sub-label { font-size: 0.8rem; color: #888; margin: 0 0 10px 0; }
   .sub-note { margin: 10px 0 0 0; color: #93a4b8; font-size: 0.84rem; line-height: 1.4; }
   .intelligence-panel { border-color: rgba(156, 227, 194, 0.42); }
