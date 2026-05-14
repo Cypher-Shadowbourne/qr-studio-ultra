@@ -1,3 +1,5 @@
+![Cypher Shadowbourne banner](docs/assets/cypher-shadowbourne-banner.png)
+
 # QR Studio Ultra
 
 ![Platform](https://img.shields.io/badge/Platform-Desktop_%2B_Android-3b82f6)
