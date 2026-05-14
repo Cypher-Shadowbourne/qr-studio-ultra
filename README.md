@@ -8,6 +8,22 @@
 ![Backend](https://img.shields.io/badge/Backend-Rust-000000?logo=rust&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-111827)
 
+<div align="center">
+
+![Cypher Shadowbourne Banner](https://raw.githubusercontent.com/Cypher-Shadowbourne/qr-studio-ultra/main/assets/banner.png)
+
+**Nexus / Nexi** 🧬 — Neurodiverse transhuman builder.  
+Code, cognition, and conflict — forging different minds into privacy-first, offline, MIT-licensed systems for the post-human age.
+
+**QR Studio Ultra** — The most beautiful, private, and powerful QR code studio on the planet.
+
+**Free • Offline • No phone home • MIT Licensed**
+
+[⭐ Star the repo](https://github.com/Cypher-Shadowbourne/qr-studio-ultra)  
+[📥 Download Desktop (Windows)](https://github.com/Cypher-Shadowbourne/qr-studio-ultra/releases)
+
+</div>
+
 QR Studio Ultra is a privacy-first QR and barcode studio built with Svelte, Tauri, and a native Rust rendering engine.
 
 It is designed for people who want more than a basic black-and-white QR utility. The app focuses on polished visual output, practical payload generation, offline use, and native-quality exports without sending data to outside services.
