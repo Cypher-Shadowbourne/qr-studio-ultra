@@ -14,7 +14,6 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.annotation.Keep
-import androidx.core.content.ContextCompat.startActivity
 import androidx.print.PrintHelper
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit

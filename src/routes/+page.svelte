@@ -4,6 +4,7 @@
   import { backOut, cubicOut } from "svelte/easing";
   import { invoke } from "@tauri-apps/api/core";
   import { settingsStore } from "$lib/settingsStore.svelte";
+  import SecurityWatermarkControl from "$lib/components/SecurityWatermarkControl.svelte";
   import { generateAiMagicDesign, getProviderLabel } from "$lib/aiService";
   import Settings from "./Settings.svelte";
   import { Format, scan, cancel, checkPermissions, requestPermissions, openAppSettings } from "@tauri-apps/plugin-barcode-scanner";
@@ -275,6 +276,11 @@
   let logoSizePercent = 22;
   let logoOpacityPercent = 100;
 
+  let watermarkEnabled = false;
+  let watermarkValue = "";
+  let manualErrorCorrection = false;
+  let errorCorrectionLevel = "H"; // Default to High for better reliability with logos/watermarks
+
   let generationTimer: ReturnType<typeof setTimeout> | null = null;
   const sanitizeShape = (shape: string, fallback = "square") =>
     shape === "circle" || shape === "rounded" || shape === "square" ? shape : fallback;
@@ -366,7 +372,7 @@
         ringColorMode, ringGradientMode, centerOverlayMode, centerOverlayStyle,
         centerOverlayColor, centerOverlayColor2, centerOverlayColor3, centerOverlayColor4,
         centerOverlayUseFourthStop, centerOverlayGradientMode, centerOverlayColorMode,
-        transparentFrameBg
+        transparentFrameBg, watermarkEnabled, watermarkValue
       ];
       if (buildFinalQrData().trim()) debouncedRunGeneration();
   }
@@ -874,12 +880,12 @@
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const rect = cropImgEl.getBoundingClientRect();
-    const uniformScale = Math.min(rect.width / cropImgNaturalW, rect.height / cropImgNaturalH);
-    const inverseScale = 1 / uniformScale;
+    const scaleX = cropImgNaturalW / rect.width;
+    const scaleY = cropImgNaturalH / rect.height;
     
     // Dragging logic inverted so dragging the image feels like panning a map
-    const newX = cropStartX - (clientX - dragStartX) * inverseScale;
-    const newY = cropStartY - (clientY - dragStartY) * inverseScale;
+    const newX = cropStartX - (clientX - dragStartX) * scaleX;
+    const newY = cropStartY - (clientY - dragStartY) * scaleY;
     
     cropX = Math.max(0, Math.min(newX, cropImgNaturalW - cropSize));
     cropY = Math.max(0, Math.min(newY, cropImgNaturalH - cropSize));
@@ -1293,7 +1299,6 @@
   }
 
   function applyStyleTemplate(settings: Record<string, any> | undefined) {
-    console.log("applyStyleTemplate called with settings:", settings);
     if (!settings || typeof settings !== "object") {
       showSaveToastMessage("This template could not be loaded.", "error");
       return false;
@@ -1432,7 +1437,6 @@
   }
 
   function saveTemplate(kind: "single" | "batch") {
-    console.log("saveTemplate called, kind:", kind);
     if (kind === "batch" && !getBatchLines().length) {
       showSaveToastMessage("Add one batch payload per line before saving a batch template.", "error");
       return;
@@ -1480,7 +1484,6 @@
   }
 
   async function loadTemplate(template: StudioTemplate) {
-    console.log("loadTemplate called:", template.name, "kind:", template.kind);
     const loaded = applyStyleTemplate(template.settings);
     if (!loaded) return;
 
@@ -1506,7 +1509,6 @@
   }
 
   function deleteTemplate(id: string) {
-    console.log("deleteTemplate called, id:", id);
     savedTemplates = savedTemplates.filter((item) => item.id !== id);
     persistSavedTemplates();
     showSaveToastMessage("Template removed.", "info");
@@ -1646,13 +1648,10 @@
   }
 
   async function renderBatchImage(payload: string) {
-    console.log("renderBatchImage for payload:", payload);
     const options = buildQrRenderOptions(payload);
-    console.log("Render options built:", options);
     const baseImage = await invoke<string>("generate_ultra_qr", {
       options
     });
-    console.log("Backend generated image, length:", baseImage.length);
     const img = await loadImageSource(baseImage);
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
@@ -1722,9 +1721,7 @@
   }
 
   async function generateBatch() {
-    console.log("generateBatch called");
     const lines = getBatchLines();
-    console.log("Batch lines:", lines);
     if (!lines.length) {
       showSaveToastMessage("Add one batch payload per line.", "error");
       return;
@@ -1737,7 +1734,6 @@
     try {
       const results: BatchResult[] = [];
       for (const [index, payload] of lines.entries()) {
-        console.log(`Rendering batch item ${index + 1}/${lines.length}: ${payload}`);
         const image = await renderBatchImage(payload);
         results.push({
           id: `${Date.now()}-${index}`,
@@ -1749,7 +1745,6 @@
         batchProgress = index + 1;
       }
       batchResults = results;
-      console.log("Batch results generated:", batchResults.length);
       showSaveToastMessage(`Generated ${results.length} batch QR codes.`, "success");
     } catch (e) {
       console.error("Batch generation failed:", e);
@@ -1762,7 +1757,6 @@
   }
 
   function loadBatchResult(result: BatchResult) {
-    console.log("loadBatchResult called for:", result.label);
     const payload = result.payload.trim();
     const kind = classifyScan(payload, Format.QRCode);
     
@@ -1840,7 +1834,6 @@
   }
 
   async function saveBatchResult(result: BatchResult) {
-    console.log("saveBatchResult called for:", result.label);
     try {
       const isMobile = isNativeMobileDevice();
       const b64Data = result.image; // Keep full data URL for invoke
@@ -1864,7 +1857,6 @@
   }
 
   async function saveAllBatchAsZip() {
-    console.log("saveAllBatchAsZip called, results count:", batchResults.length);
     if (!batchResults.length) return;
     try {
       const isMobile = isNativeMobileDevice();
@@ -2058,7 +2050,7 @@
 
     cryptoBusy = true;
     encryptedPayload = "";
-    encryptedForensicDate = getForensicDateStamp();
+    encryptedForensicDate = watermarkEnabled && watermarkValue ? watermarkValue : getForensicDateStamp();
     try {
       encryptedPayload = await invoke<string>("encrypt_qr_payload", {
         plaintext: encryptPlaintext,
@@ -3282,6 +3274,10 @@
       finalData = `https://zoom.us/j/${zoomMeetingId}${zoomPass ? "?pwd=" + zoomPass : ""}`;
     }
 
+    if (watermarkEnabled && watermarkValue && !finalData.includes("WMARK:")) {
+      finalData += `\nWMARK:${watermarkValue}`;
+    }
+
     return finalData;
   }
 
@@ -3336,7 +3332,10 @@
       centerOverlayColor4,
       centerOverlayUseFourthStop,
       centerOverlayGradientMode,
-      centerOverlayColorMode
+      centerOverlayColorMode,
+      errorCorrectionLevel,
+      watermarkEnabled,
+      watermarkValue
     };
   }
 
@@ -3376,6 +3375,7 @@
           <div class="scanner-corner top-right"></div>
           <div class="scanner-corner bottom-left"></div>
           <div class="scanner-corner bottom-right"></div>
+          <div class="scanner-line"></div>
           {#if scannerStatus}
             <div class="scanner-status">{scannerStatus}</div>
           {/if}
@@ -3513,14 +3513,13 @@
             />
             {#if cropImgNaturalW > 0}
               {@const rect = cropImgEl?.getBoundingClientRect()}
-              {@const uniformScale = rect ? Math.min(rect.width / cropImgNaturalW, rect.height / cropImgNaturalH) : 1}
-              {@const offsetX = rect ? (rect.width - cropImgNaturalW * uniformScale) / 2 : 0}
-              {@const offsetY = rect ? (rect.height - cropImgNaturalH * uniformScale) / 2 : 0}
+              {@const scaleX = rect ? rect.width / cropImgNaturalW : 1}
+              {@const scaleY = rect ? rect.height / cropImgNaturalH : 1}
               <div class="crop-box" style="
-                left: {offsetX + cropX * uniformScale}px;
-                top: {offsetY + cropY * uniformScale}px;
-                width: {cropSize * uniformScale}px;
-                height: {cropSize * uniformScale}px;
+                left: {cropX * scaleX}px;
+                top: {cropY * scaleY}px;
+                width: {cropSize * scaleX}px;
+                height: {cropSize * scaleY}px;
               "></div>
             {/if}
           </div>
@@ -3790,6 +3789,14 @@
 
       <fieldset class="panel intelligence-panel">
         <legend>Studio Intelligence</legend>
+        <div class="sub-panel">
+          <SecurityWatermarkControl 
+            enabled={watermarkEnabled} 
+            value={watermarkValue} 
+            onToggle={(e) => watermarkEnabled = e}
+            onValueChange={(v) => watermarkValue = v}
+          />
+        </div>
         <div class={`scan-score-card ${currentScannability.className}`}>
           <div class="scan-score-head">
             <div>
@@ -3802,6 +3809,36 @@
             <span style={`width: ${currentScannability.score}%`}></span>
           </div>
           <p>{currentScannability.notes[0]}</p>
+        </div>
+
+        <div class="sub-panel">
+          <div class="field-head">
+            <p class="sub-label">Error Correction: <strong>{manualErrorCorrection ? 'Manual Selection' : 'Automatic Optimizer'}</strong></p>
+            <label class="switch">
+              <input type="checkbox" bind:checked={manualErrorCorrection}>
+              <span class="slider round"></span>
+            </label>
+          </div>
+          {#if manualErrorCorrection}
+            <div class="ai-chips mt-10">
+              {#each ["L", "M", "Q", "H"] as level}
+                <button 
+                  type="button" 
+                  class="level-chip" 
+                  class:active={errorCorrectionLevel === level}
+                  on:click={() => errorCorrectionLevel = level}
+                >
+                  {level}
+                  <span class="level-desc">
+                    {level === 'L' ? '7%' : level === 'M' ? '15%' : level === 'Q' ? '25%' : '30%'}
+                  </span>
+                </button>
+              {/each}
+            </div>
+            <p class="sub-note">Higher correction allows more visual damage or larger logos while remaining scannable.</p>
+          {:else}
+            <p class="sub-note">The engine automatically balances density and scannability based on your design.</p>
+          {/if}
         </div>
 
         <div class="sub-panel">
@@ -4005,7 +4042,9 @@
               <option value="rounded">Rounded Blocks</option>
             </select>
           </label>
-          <label class="select-field">Fill Mode
+        </div>
+        <div class="row split">
+          <label class="select-field full-width">Fill Mode
             <select bind:value={fillType}>
               <option value="Solid">Solid Color</option>
               <option value="Linear">Gradient</option>
@@ -4528,6 +4567,60 @@
     background: rgba(255, 255, 255, 0.2);
     color: white;
   }
+  .level-chip {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 10px 5px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .level-chip.active {
+    background: rgba(33, 212, 253, 0.15);
+    border-color: #21d4fd;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(33, 212, 253, 0.2);
+  }
+  .level-desc {
+    font-size: 0.65rem;
+    opacity: 0.7;
+    font-weight: normal;
+  }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #24242C;
+    transition: .4s;
+    border: 1px solid #3A3A45;
+  }
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 16px; width: 16px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .4s;
+  }
+  input:checked + .slider { background-color: #21d4fd; border-color: #21d4fd; }
+  input:focus + .slider { box-shadow: 0 0 1px #21d4fd; }
+  input:checked + .slider:before { transform: translateX(20px); }
+  .slider.round { border-radius: 24px; }
+  .slider.round:before { border-radius: 50%; }
   .ai-force-center {
     margin: 0 0 12px 0;
     padding: 10px 12px;
@@ -4587,7 +4680,9 @@
   :global(body.scanner-active),
   :global(body.scanner-active > div),
   :global(body.scanner-active #svelte),
-  :global(body.scanner-active [data-sveltekit-preload-data]) {
+  :global(body.scanner-active [data-sveltekit-preload-data]),
+  :global(body.scanner-active #app),
+  :global(body.scanner-active main) {
     background: transparent !important;
     background-color: transparent !important;
   }
@@ -4748,15 +4843,14 @@
   }
 
   /* CROP MODAL STYLING */
-  .crop-modal { max-width: 500px; border-color: #21d4fd; box-shadow: 0 10px 30px rgba(33, 212, 253, 0.2); overflow-y: auto; max-height: 90vh; }
+  .crop-modal { max-width: 500px; border-color: #21d4fd; box-shadow: 0 10px 30px rgba(33, 212, 253, 0.2); }
   .crop-modal h3 { color: #21d4fd; }
   .crop-container {
     position: relative; width: 100%; overflow: hidden; border-radius: 8px;
     cursor: grab; user-select: none; touch-action: none;
-    max-height: 45vh;
   }
   .crop-container:active { cursor: grabbing; }
-  .crop-img { width: 100%; display: block; pointer-events: none; object-fit: contain; max-height: 45vh; }
+  .crop-img { width: 100%; display: block; pointer-events: none; }
   .crop-box {
     position: absolute; border: 3px solid #21d4fd; 
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); 
@@ -4802,6 +4896,25 @@
   .scanner-corner.top-right { top: 0; right: 0; border-width: 5px 5px 0 0; border-top-right-radius: 18px; }
   .scanner-corner.bottom-left { bottom: 0; left: 0; border-width: 0 0 5px 5px; border-bottom-left-radius: 18px; }
   .scanner-corner.bottom-right { bottom: 0; right: 0; border-width: 0 5px 5px 0; border-bottom-right-radius: 18px; }
+  
+  .scanner-line {
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    width: 80%;
+    height: 3px;
+    background: #4dffb3;
+    box-shadow: 0 0 20px #4dffb3, 0 0 40px rgba(77, 255, 179, 0.6);
+    border-radius: 10px;
+    animation: scan-anim 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    z-index: 2;
+  }
+
+  @keyframes scan-anim {
+    0%, 100% { top: 12%; opacity: 0.3; }
+    50% { top: 88%; opacity: 1; }
+  }
+
   .scanner-status { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 18px; color: #efe; font-size: 0.98rem; text-shadow: 0 0 10px rgba(0, 0, 0, 0.65); }
   .scanner-caption { margin: 0; color: #d7d7d7; text-align: center; font-size: 0.96rem; line-height: 1.4; }
   .scanner-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
@@ -4868,7 +4981,7 @@
   .native-color-proxy { position: fixed; inset: auto auto -100px -100px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
   .sub-panel { background-color: #111115; border-radius: 8px; padding: 12px; margin-top: 15px; }
-  .crop-adjustments { text-align: left; background-color: #1a1a22; border: 1px solid rgba(33, 212, 253, 0.2); }
+  .crop-adjustments { text-align: left; }
   .sub-label { font-size: 0.8rem; color: #888; margin: 0 0 10px 0; }
   .sub-note { margin: 10px 0 0 0; color: #93a4b8; font-size: 0.84rem; line-height: 1.4; }
   .intelligence-panel { border-color: rgba(156, 227, 194, 0.42); }

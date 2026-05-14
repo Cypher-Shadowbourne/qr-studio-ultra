@@ -1,3 +1,661 @@
+QR Studio Ultra Project Scan
+Generated: 05/04/2026 10:03:51
+Project Path: C:\Users\pbess\Desktop\qr-studio-ultra-upload
+
+
+============================================================
+SYSTEM INFO
+============================================================
+
+PowerShell Version:
+7.6.1
+
+Node Version:
+v22.14.0
+
+NPM Version:
+11.12.1
+
+Rust Version:
+rustc 1.94.1 (e408947bf 2026-03-25)
+
+Cargo Version:
+cargo 1.94.1 (29ea6fb6a 2026-03-24)
+
+============================================================
+TOP-LEVEL DIRECTORY
+============================================================
+
+[FILE] .gitignore
+[FILE] .output.txt
+[FILE] build_output.txt
+[FILE] CONTRIBUTING.md
+[FILE] favicon.ico
+[FILE] icon.png
+[FILE] keystore.properties.example
+[FILE] LICENSE
+[FILE] package-lock.json
+[FILE] package.json
+[FILE] project_structure.txt
+[FILE] qr-studio-ultra-project-scan.txt
+[FILE] README.md
+[FILE] scan-project.ps1
+[FILE] svelte.config.js
+[FILE] tauri_dev_output.txt
+[FILE] tsconfig.json
+[FILE] USER_MANUAL.md
+[FILE] vite.config.js
+[DIR]  _repo_audit_output
+[DIR]  .git
+[DIR]  .idea
+[DIR]  .svelte-kit
+[DIR]  .vscode
+[DIR]  App_Brand_Kit
+[DIR]  build
+[DIR]  docs
+[DIR]  fastlane
+[DIR]  node_modules
+[DIR]  src
+[DIR]  src-tauri
+[DIR]  static
+
+============================================================
+PROJECT TREE
+============================================================
+
+[DIR]  _repo_audit_output
+  [FILE] repo_audit_report.json
+[FILE] .gitignore
+[FILE] .output.txt
+[DIR]  App_Brand_Kit
+  [DIR]  android
+    [DIR]  mipmap-hdpi
+      [FILE] ic_launcher.png
+    [DIR]  mipmap-mdpi
+      [FILE] ic_launcher.png
+    [DIR]  mipmap-xhdpi
+      [FILE] ic_launcher.png
+    [DIR]  mipmap-xxhdpi
+      [FILE] ic_launcher.png
+    [DIR]  mipmap-xxxhdpi
+      [FILE] ic_launcher.png
+  [FILE] asset_directories.txt
+  [DIR]  master
+    [FILE] icon_master.png
+  [DIR]  play-store
+    [FILE] play_store_icon.png
+  [DIR]  tauri
+    [FILE] 128x128.png
+    [FILE] 256x256.png
+    [FILE] 32x32.png
+    [FILE] icon.ico
+[FILE] build_output.txt
+[FILE] CONTRIBUTING.md
+[DIR]  docs
+  [DIR]  screenshots
+    [FILE] gallery-01.png
+    [FILE] gallery-02.png
+    [FILE] gallery-03.png
+    [FILE] gallery-04.png
+    [FILE] gallery-05.png
+    [FILE] gallery-06.png
+    [FILE] gallery-07.png
+    [FILE] gallery-08.png
+    [FILE] gallery-09.png
+    [FILE] gallery-10.png
+    [FILE] gallery-11.png
+    [FILE] gallery-12.png
+    [FILE] gallery-13.png
+    [FILE] gallery-14.png
+    [FILE] QR_Studio_1776109644.png
+    [FILE] Screenshot_20260413-204347.png
+    [FILE] Screenshot_20260413-204441.png
+    [FILE] Screenshot_20260413-204500.png
+    [FILE] Screenshot_20260413-204515.png
+    [FILE] Screenshot_20260413-204547.png
+    [FILE] Screenshot_20260413-204631.png
+    [FILE] Screenshot_20260413-204646.png
+    [FILE] Screenshot_20260413-204646(1).png
+    [FILE] Screenshot_20260413-204658.png
+[DIR]  fastlane
+  [DIR]  metadata
+    [DIR]  android
+      [DIR]  en-US
+        [FILE] full_description.txt
+        [FILE] short_description.txt
+        [FILE] title.txt
+[FILE] favicon.ico
+[FILE] icon.png
+[FILE] keystore.properties.example
+[FILE] LICENSE
+[FILE] package-lock.json
+[FILE] package.json
+[FILE] project_structure.txt
+[FILE] qr-studio-ultra-project-scan.txt
+[FILE] README.md
+[FILE] scan-project.ps1
+[DIR]  src
+[DIR]  src-tauri
+  [FILE] .gitignore
+  [FILE] 2
+  [FILE] build.rs
+  [DIR]  capabilities
+    [FILE] default.json
+    [FILE] mobile.json
+  [FILE] Cargo.lock
+  [FILE] Cargo.toml
+  [DIR]  gen
+    [DIR]  android
+      [FILE] .editorconfig
+      [FILE] .gitignore
+      [DIR]  .gradle
+        [DIR]  8.14.3
+          [DIR]  checksums
+            [FILE] checksums.lock
+          [DIR]  executionHistory
+            [FILE] executionHistory.bin
+            [FILE] executionHistory.lock
+          [DIR]  expanded
+          [DIR]  fileChanges
+            [FILE] last-build.bin
+          [DIR]  fileHashes
+            [FILE] fileHashes.bin
+            [FILE] fileHashes.lock
+            [FILE] resourceHashesCache.bin
+          [FILE] gc.properties
+          [DIR]  vcsMetadata
+        [DIR]  9.4.1
+          [DIR]  checksums
+            [FILE] checksums.lock
+          [DIR]  executionHistory
+            [FILE] executionHistory.bin
+            [FILE] executionHistory.lock
+          [DIR]  expanded
+          [DIR]  fileChanges
+            [FILE] last-build.bin
+          [DIR]  fileHashes
+            [FILE] fileHashes.bin
+            [FILE] fileHashes.lock
+            [FILE] resourceHashesCache.bin
+          [FILE] gc.properties
+          [DIR]  vcsMetadata
+        [DIR]  buildOutputCleanup
+          [FILE] buildOutputCleanup.lock
+          [FILE] cache.properties
+          [FILE] outputFiles.bin
+        [FILE] config.properties
+        [FILE] file-system.probe
+        [DIR]  kotlin
+          [DIR]  errors
+          [DIR]  sessions
+        [DIR]  noVersion
+          [FILE] buildLogic.lock
+        [DIR]  vcs-1
+          [FILE] gc.properties
+      [DIR]  app
+      [FILE] app-tasks.txt
+        [FILE] .gitignore
+        [DIR]  .gradle
+          [FILE] config.properties
+        [FILE] build.gradle.kts
+        [FILE] build.gradle.old
+        [FILE] local.properties
+        [FILE] proguard-rules.pro
+        [FILE] proguard-tauri.pro
+        [FILE] qr-studio-ultra-upload-key.jks
+        [DIR]  src
+          [DIR]  main
+            [FILE] AndroidManifest.xml
+            [DIR]  assets
+              [FILE] tauri.conf.json
+            [DIR]  java
+              [DIR]  com
+                [DIR]  cypher
+                  [DIR]  qrstudioultra
+                    [DIR]  generated
+                      [FILE] Ipc.kt
+                      [FILE] Logger.kt
+                      [FILE] PermissionHelper.kt
+                      [FILE] proguard-wry.pro
+                      [FILE] RustWebChromeClient.kt
+                      [FILE] RustWebView.kt
+                      [FILE] RustWebViewClient.kt
+                      [FILE] TauriActivity.kt
+                      [FILE] WryActivity.kt
+                    [FILE] MainActivity.kt
+                    [FILE] MainActivity.ktBK
+                    [FILE] MediaStoreSaver.kt
+            [DIR]  jniLibs
+              [DIR]  arm64-v8a
+                [FILE] libqr_studio_ultra_lib.so
+              [DIR]  armeabi-v7a
+                [FILE] libqr_studio_ultra_lib.so
+              [DIR]  x86
+              [DIR]  x86_64
+                [FILE] libqr_studio_ultra_lib.so
+                [FILE] libqr_studio_ultra_lib.so
+            [DIR]  res
+              [DIR]  drawable
+              [DIR]  drawable-v24
+                [FILE] ic_launcher_foreground.xml
+                [FILE] ic_launcher_background.xml
+              [DIR]  layout
+                [FILE] activity_main.xml
+              [DIR]  mipmap-anydpi-v26
+                [FILE] ic_launcher.xml
+              [DIR]  mipmap-hdpi
+                [FILE] ic_launcher_foreground.png
+                [FILE] ic_launcher_round.png
+                [FILE] ic_launcher.png
+              [DIR]  mipmap-mdpi
+                [FILE] ic_launcher_foreground.png
+                [FILE] ic_launcher_round.png
+                [FILE] ic_launcher.png
+              [DIR]  mipmap-xhdpi
+                [FILE] ic_launcher_foreground.png
+                [FILE] ic_launcher_round.png
+                [FILE] ic_launcher.png
+              [DIR]  mipmap-xxhdpi
+                [FILE] ic_launcher_foreground.png
+                [FILE] ic_launcher_round.png
+                [FILE] ic_launcher.png
+              [DIR]  mipmap-xxxhdpi
+                [FILE] ic_launcher_foreground.png
+                [FILE] ic_launcher_round.png
+                [FILE] ic_launcher.png
+              [DIR]  values
+              [DIR]  values-night
+                [FILE] themes.xml
+                [FILE] colors.xml
+                [FILE] ic_launcher_background.xml
+                [FILE] strings.xml
+                [FILE] themes.xml
+              [DIR]  xml
+                [FILE] file_paths.xml
+        [FILE] tauri.build.gradle.kts
+        [FILE] tauri.properties
+      [FILE] build.gradle.kts
+      [DIR]  buildSrc
+        [DIR]  .gradle
+          [DIR]  8.14.3
+            [DIR]  executionHistory
+              [FILE] executionHistory.bin
+              [FILE] executionHistory.lock
+          [DIR]  9.4.1
+            [DIR]  executionHistory
+              [FILE] executionHistory.bin
+              [FILE] executionHistory.lock
+          [DIR]  buildOutputCleanup
+            [FILE] buildOutputCleanup.lock
+            [FILE] cache.properties
+            [FILE] outputFiles.bin
+          [FILE] file-system.probe
+        [DIR]  .kotlin
+          [DIR]  sessions
+        [FILE] build.gradle.kts
+        [DIR]  src
+          [DIR]  main
+            [DIR]  java
+              [DIR]  com
+                [DIR]  cypher
+                  [DIR]  qrstudioultra
+                    [DIR]  kotlin
+                      [FILE] BuildTask.kt
+                      [FILE] RustPlugin.kt
+      [DIR]  gradle
+      [FILE] gradle.properties
+        [FILE] gradle-daemon-jvm.properties
+        [DIR]  wrapper
+          [FILE] gradle-wrapper.jar
+          [FILE] gradle-wrapper.properties
+      [FILE] gradlew
+      [FILE] gradlew.bat
+      [FILE] local.properties
+      [FILE] settings.gradle
+      [FILE] tauri.settings.gradle
+    [DIR]  schemas
+      [FILE] acl-manifests.json
+      [FILE] android-schema.json
+      [FILE] capabilities.json
+      [FILE] desktop-schema.json
+      [FILE] mobile-schema.json
+      [FILE] windows-schema.json
+  [DIR]  icons
+    [FILE] 128x128.png
+    [FILE] 128x128@2x.png
+    [FILE] 256x256.png
+    [FILE] 32x32.png
+    [FILE] 64x64.png
+    [FILE] icon.icns
+    [FILE] icon.ico
+    [FILE] icon.png
+    [DIR]  ios
+      [FILE] AppIcon-20x20@1x.png
+      [FILE] AppIcon-20x20@2x-1.png
+      [FILE] AppIcon-20x20@2x.png
+      [FILE] AppIcon-20x20@3x.png
+      [FILE] AppIcon-29x29@1x.png
+      [FILE] AppIcon-29x29@2x-1.png
+      [FILE] AppIcon-29x29@2x.png
+      [FILE] AppIcon-29x29@3x.png
+      [FILE] AppIcon-40x40@1x.png
+      [FILE] AppIcon-40x40@2x-1.png
+      [FILE] AppIcon-40x40@2x.png
+      [FILE] AppIcon-40x40@3x.png
+      [FILE] AppIcon-512@2x.png
+      [FILE] AppIcon-60x60@2x.png
+      [FILE] AppIcon-60x60@3x.png
+      [FILE] AppIcon-76x76@1x.png
+      [FILE] AppIcon-76x76@2x.png
+      [FILE] AppIcon-83.5x83.5@2x.png
+    [FILE] Square107x107Logo.png
+    [FILE] Square142x142Logo.png
+    [FILE] Square150x150Logo.png
+    [FILE] Square284x284Logo.png
+    [FILE] Square30x30Logo.png
+    [FILE] Square310x310Logo.png
+    [FILE] Square44x44Logo.png
+    [FILE] Square71x71Logo.png
+    [FILE] Square89x89Logo.png
+    [FILE] StoreLogo.png
+  [DIR]  src
+    [FILE] lib.rs
+    [FILE] main.rs
+  [FILE] tauri.conf.json
+  [FILE] test_file.txt
+  [FILE] app.html
+  [DIR]  lib
+    [FILE] aiService.ts
+    [FILE] settingsStore.svelte.ts
+  [DIR]  routes
+    [FILE] +layout.ts
+    [FILE] +page.svelte
+    [FILE] +page.svelte.20260423-135902.bak
+    [FILE] +page.svelte.bak
+    [FILE] +page.svelteBK
+    [FILE] Settings.svelte
+  [FILE] sample.test.ts
+[DIR]  static
+  [FILE] app-icon.png
+  [FILE] favicon.png
+  [FILE] svelte.svg
+  [FILE] tauri.svg
+  [FILE] vite.svg
+[FILE] svelte.config.js
+[FILE] tauri_dev_output.txt
+[FILE] tsconfig.json
+[FILE] USER_MANUAL.md
+[FILE] vite.config.js
+
+============================================================
+IMPORTANT FILE CONTENTS
+============================================================
+
+
+------------------------------------------------------------
+package.json
+------------------------------------------------------------
+{
+  "name": "qr-studio-ultra",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:rust": "cd src-tauri && cargo test",
+    "tauri": "tauri"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-barcode-scanner": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-opener": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.0",
+    "@sveltejs/kit": "^2.58.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@tauri-apps/cli": "^2",
+    "@testing-library/svelte": "^5.3.1",
+    "@vitest/browser": "^4.1.5",
+    "jsdom": "^29.0.2",
+    "svelte": "^5.55.5",
+    "svelte-check": "^4.0.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
+
+
+------------------------------------------------------------
+vite.config.js
+------------------------------------------------------------
+import { defineConfig } from "vitest/config";
+import { sveltekit } from "@sveltejs/kit/vite";
+
+// @ts-expect-error process is a nodejs global
+const host = process.env.TAURI_DEV_HOST;
+
+// https://vite.dev/config/
+export default defineConfig(async () => ({
+  plugins: [sveltekit()],
+
+  test: {
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    globals: true,
+    environment: 'jsdom',
+  },
+
+  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
+  //
+  // 1. prevent Vite from obscuring rust errors
+  clearScreen: false,
+  // 2. tauri expects a fixed port, fail if that port is not available
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: host || false,
+    hmr: host
+      ? {
+          protocol: "ws",
+          host,
+          port: 1421,
+        }
+      : undefined,
+    watch: {
+      // 3. tell Vite to ignore watching `src-tauri`
+      ignored: ["**/src-tauri/**"],
+    },
+  },
+}));
+
+
+------------------------------------------------------------
+vite.config.ts
+------------------------------------------------------------
+File not found.
+
+------------------------------------------------------------
+svelte.config.js
+------------------------------------------------------------
+// Tauri doesn't have a Node.js server to do proper SSR
+// so we use adapter-static with a fallback to index.html to put the site in SPA mode
+// See: https://svelte.dev/docs/kit/single-page-apps
+// See: https://v2.tauri.app/start/frontend/sveltekit/ for more info
+import adapter from "@sveltejs/adapter-static";
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+  preprocess: vitePreprocess(),
+  kit: {
+    adapter: adapter({
+      fallback: "index.html",
+    }),
+  },
+};
+
+export default config;
+
+
+------------------------------------------------------------
+svelte.config.ts
+------------------------------------------------------------
+File not found.
+
+------------------------------------------------------------
+tsconfig.json
+------------------------------------------------------------
+{
+  "extends": "./.svelte-kit/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "moduleResolution": "bundler"
+  }
+  // Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
+  // except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
+  //
+  // If you want to overwrite includes/excludes, make sure to copy over the relevant includes/excludes
+  // from the referenced tsconfig.json - TypeScript does not merge them in
+}
+
+
+------------------------------------------------------------
+src-tauri\Cargo.toml
+------------------------------------------------------------
+[package]
+name = "qr-studio-ultra"
+version = "0.1.0"
+description = "QR Studio Ultra Rust Edition"
+authors = ["Paul Bess"]
+edition = "2021"
+
+[lib]
+name = "qr_studio_ultra_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["image-png"] }
+tauri-plugin-shell = "2.0"
+tauri-plugin-barcode-scanner = "2.0"
+fast_qr = { version = "0.13", features = ["image"] }
+qr-code-styling = "0.1"
+image = "0.25"
+base64 = "0.22"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri-plugin-dialog = "2.0"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+zip = "2.2"
+argon2 = "0.5"
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+
+------------------------------------------------------------
+src-tauri\tauri.conf.json
+------------------------------------------------------------
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "qr-studio-ultra",
+  "version": "1.0.0",
+  "identifier": "com.cypher.qrstudioultra",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "QR Studio Ultra",
+        "width": 800,
+        "height": 600,
+        "transparent": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
+
+
+------------------------------------------------------------
+src-tauri\capabilities\default.json
+------------------------------------------------------------
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for the QR Studio Ultra",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:image:default",
+    "core:webview:default",
+	"barcode-scanner:default",
+    "shell:default",
+    "shell:allow-open",
+    "dialog:default",
+    "dialog:allow-save",
+    "dialog:allow-open"
+  ]
+}
+
+------------------------------------------------------------
+src-tauri\src\main.rs
+------------------------------------------------------------
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    qr_studio_ultra_lib::run()
+}
+
+
+------------------------------------------------------------
+src-tauri\src\lib.rs
+------------------------------------------------------------
 use aes_gcm::{Aes256Gcm, Nonce as AesNonce};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose, Engine as _};
@@ -771,6 +1429,8 @@ async fn save_to_device(
             .map_err(|e| format!("Could not locate a save folder: {}", e))?
             .join("QR Studio Ultra");
 
+        println!("Final target directory: {}", target_dir.display());
+
         if !target_dir.exists() {
             std::fs::create_dir_all(&target_dir)
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
@@ -1016,14 +1676,6 @@ struct QrOptions {
     center_overlay_gradient_mode: Option<String>,
     #[serde(rename = "centerOverlayColorMode")]
     center_overlay_color_mode: Option<String>,
-    #[serde(rename = "errorCorrectionLevel")]
-    error_correction_level: Option<String>,
-    #[serde(rename = "watermarkEnabled")]
-    #[allow(dead_code)]
-    watermark_enabled: Option<bool>,
-    #[serde(rename = "watermarkValue")]
-    #[allow(dead_code)]
-    watermark_value: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1760,18 +2412,11 @@ fn build_base_qr_svg(options: &QrOptions, size: u32) -> Result<String, String> {
             .with_gradient(Gradient::simple_linear(dot_color_1, dot_color_2))
     };
 
-    let ecl = match options.error_correction_level.as_deref() {
-        Some("L") => ErrorCorrectionLevel::L,
-        Some("M") => ErrorCorrectionLevel::M,
-        Some("Q") => ErrorCorrectionLevel::Q,
-        _ => ErrorCorrectionLevel::H,
-    };
-
     let mut builder = QRCodeStyling::builder()
         .data(&options.data)
         .size(size)
         .margin(12)
-        .qr_options(QROptions::new().with_error_correction_level(ecl))
+        .qr_options(QROptions::new().with_error_correction_level(ErrorCorrectionLevel::H))
         .dots_options(dots)
         .corners_square_options(
             CornersSquareOptions::new(map_corner_square_type(&options.eye_shape))
@@ -2535,15 +3180,9 @@ fn generate_ultra_qr(options: QrOptions) -> Result<String, String> {
     let logo_b64 = options.logo_b64;
     let logo_size_percent = options.logo_size.unwrap_or(22).clamp(10, 36);
     let logo_opacity_percent = options.logo_opacity.unwrap_or(100).clamp(15, 100);
-    let ecl = match options.error_correction_level.as_deref() {
-        Some("L") => fast_qr::ECL::L,
-        Some("M") => fast_qr::ECL::M,
-        Some("Q") => fast_qr::ECL::Q,
-        _ => fast_qr::ECL::H,
-    };
 
     let qrcode = QRBuilder::new(data)
-        .ecl(ecl)
+        .ecl(fast_qr::ECL::H)
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -3083,9 +3722,6 @@ mod tests {
             center_overlay_use_fourth_stop: Some(true),
             center_overlay_gradient_mode: Some("custom".to_string()),
             center_overlay_color_mode: Some("solid".to_string()),
-            error_correction_level: None,
-            watermark_enabled: None,
-            watermark_value: None,
         };
 
         let svg = build_svg_qr(&options).expect("svg should generate");
@@ -3125,3 +3761,420 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+
+------------------------------------------------------------
+README.md
+------------------------------------------------------------
+# QR Studio Ultra
+
+![Platform](https://img.shields.io/badge/Platform-Desktop_%2B_Android-3b82f6)
+![Framework](https://img.shields.io/badge/Framework-Tauri_2.0-FFC131?logo=tauri&logoColor=white)
+![Frontend](https://img.shields.io/badge/Frontend-Svelte-FF3E00?logo=svelte&logoColor=white)
+![Backend](https://img.shields.io/badge/Backend-Rust-000000?logo=rust&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-111827)
+
+QR Studio Ultra is a privacy-first QR and barcode studio built with Svelte, Tauri, and a native Rust rendering engine.
+
+It is designed for people who want more than a basic black-and-white QR utility. The app focuses on polished visual output, practical payload generation, offline use, and native-quality exports without sending data to outside services.
+
+> Android build artifacts are kept outside the repo. The source here is the canonical project state.
+
+## Screenshots
+
+|                                                                   |                                                                   |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| ![QR Studio Ultra screenshot 1](docs/screenshots/gallery-01.png)  | ![QR Studio Ultra screenshot 2](docs/screenshots/gallery-02.png)  |
+| ![QR Studio Ultra screenshot 3](docs/screenshots/gallery-03.png)  | ![QR Studio Ultra screenshot 4](docs/screenshots/gallery-04.png)  |
+| ![QR Studio Ultra screenshot 5](docs/screenshots/gallery-05.png)  | ![QR Studio Ultra screenshot 6](docs/screenshots/gallery-06.png)  |
+| ![QR Studio Ultra screenshot 7](docs/screenshots/gallery-07.png)  | ![QR Studio Ultra screenshot 8](docs/screenshots/gallery-08.png)  |
+| ![QR Studio Ultra screenshot 9](docs/screenshots/gallery-09.png)  | ![QR Studio Ultra screenshot 10](docs/screenshots/gallery-10.png) |
+| ![QR Studio Ultra screenshot 11](docs/screenshots/gallery-11.png) | ![QR Studio Ultra screenshot 12](docs/screenshots/gallery-12.png) |
+| ![QR Studio Ultra screenshot 13](docs/screenshots/gallery-13.png) | ![QR Studio Ultra screenshot 14](docs/screenshots/gallery-14.png) |
+
+## Quick Start
+
+If you want to run the project locally right away:
+
+```bash
+npm install
+npm run tauri dev
+```
+
+If you only want the web UI during development:
+
+```bash
+npm run dev
+```
+
+## Release Picks
+
+Current packaged Android builds in this workspace:
+
+| Build                           | Best for                           |
+| ------------------------------- | ---------------------------------- |
+| external Android package export | device testing and release sharing |
+
+Desktop development runs through Tauri with:
+
+```bash
+npm run tauri dev
+```
+
+## What It Does
+
+QR Studio Ultra currently supports:
+
+- Custom QR generation with solid or multi-stop gradients
+- Styled finder eyes and module shapes
+- Frame and ring overlays
+- Center logo upload with crop, size, and opacity controls
+- QR and barcode scanning
+- Encrypted QR payload generation and decryption
+- Wallet/payment QR creation with saved wallet profiles
+- Common payload presets like URL, Wi-Fi, vCard, email, SMS, phone, geo, event, social links, and more
+- Desktop Tauri use and Android packaging
+
+## Feature Matrix
+
+| Area       | Included                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| QR styling | solid fills, multi-stop gradients, custom module shapes, styled eyes                            |
+| Logos      | upload, crop, center placement, size control, opacity control                                   |
+| Scanner    | QR, Code 128, EAN, UPC, ISBN, Code 39, PDF417 and more; square targeting UI, animated scan line |
+| Payloads   | URL, Wi-Fi, vCard, email, SMS, phone, geo, event, social, crypto and more                       |
+| Encryption | passphrase-protected QR payloads (ChaCha20-Poly1305, AES-256-GCM), local-only processing        |
+| Crypto     | wallet profiles, richer payment URI generation, optional amount/label/message                   |
+| Platforms  | Tauri desktop workflow, Android builds, native save/share integration                           |
+| Rendering  | Rust-backed QR generation and logo compositing                                                  |
+
+## Why This Project Exists
+
+Most QR apps are either too plain, too intrusive, or too careless about quality.
+
+QR Studio Ultra takes a different route:
+
+- generation stays local
+- encryption stays on-device
+- rendering quality matters
+- exports are meant to look intentional
+- scanning reliability is treated as a product concern, not an afterthought
+
+The app uses a Rust backend for the heavy rendering work and a Svelte frontend for fast interaction and UI flexibility.
+
+## Highlights
+
+### Native Rust Rendering
+
+The QR image itself is rendered in Rust instead of relying entirely on a browser-only drawing path.
+
+That gives the project tighter control over:
+
+- module shaping
+- finder eye rendering
+- gradient fills
+- logo compositing
+- image export quality
+
+Recent rendering work also moved toward cleaner direct-module sampling, which noticeably improved edge quality and reduced visual artifacts.
+
+### Logo Workflow That Respects the QR
+
+Center logos are handled with a crop-first workflow in the frontend and then composited natively in Rust.
+
+Current logo features include:
+
+- crop and framing flow before generation
+- adjustable logo size
+- adjustable logo opacity
+- centered compositing with a protected backing plate to keep the code more scan-safe
+
+### Scanner Support Beyond QR
+
+The scanner is not limited to QR codes.
+
+The app can request a wider set of barcode formats through the Tauri barcode scanner plugin, and the scanner UI includes:
+
+- square target aperture
+- animated scan line
+- result type/format display
+
+**Supported Barcode Formats:**
+
+- **Code 128** — Alphanumeric barcodes commonly used for shipping labels and inventory
+- **EAN** (European Article Number) — Standard retail barcodes for products
+- **UPC** (Universal Product Code) — North American product identification codes
+- **ISBN** (International Standard Book Number) — Book identification codes
+- **Code 39** — Alphanumeric codes used in various industries
+- **PDF417** — 2D barcodes for documents and identity verification
+- And additional formats through the Tauri barcode scanner plugin
+
+### Wallet and Payment Support
+
+The crypto flow has moved beyond a single address field.
+
+It now supports:
+
+- multiple wallet networks
+- saved wallet profiles
+- optional amount, label, and message fields
+- richer URI generation for supported networks
+
+### Encrypted Payloads
+
+QR Studio Ultra includes a built-in engine for creating and reading encrypted QR codes.
+
+Key security features:
+
+- **Local Processing**: Encryption and decryption happen entirely on-device in the Rust backend.
+- **Strong Algorithms**: Supports **ChaCha20-Poly1305** (default) and **AES-256-GCM**.
+- **Key Derivation**: Uses **Argon2id** for robust password-based key derivation.
+- **Portable Format**: Encrypted payloads use a custom `QRU1:` prefix, allowing the app to automatically detect and prompt for passphrases when scanning.
+
+## Showcase Notes
+
+The app is meant to cover two use cases that usually get split across multiple tools:
+
+- a fast everyday QR utility that works locally
+- a more polished studio for branded or visually customized codes
+
+That is why the project mixes:
+
+- native rendering work
+- payload-oriented utility features
+- visual customization controls
+- Android practicality
+
+The result is intentionally a little more ambitious than a standard generator.
+
+## Tech Stack
+
+- Frontend: Svelte 5, TypeScript, Canvas
+- Native shell: Tauri 2.0
+- Backend: Rust
+- Package Manager: npm
+- QR engine: `fast_qr`
+- Image processing: `image`
+- Native plugins: barcode scanner, dialog, shell/opener, opener
+
+## Scripts
+
+The following scripts are available in `package.json`:
+
+| Script | Description |
+| :--- | :--- |
+| `npm run dev` | Starts the Vite development server for the web UI. |
+| `npm run build` | Builds the frontend for production. |
+| `npm run preview` | Previews the production build locally. |
+| `npm run check` | Runs Svelte-check and syncs Svelte-Kit. |
+| `npm run check:watch` | Runs Svelte-check in watch mode. |
+| `npm run test` | Runs frontend tests using Vitest. |
+| `npm run test:watch` | Runs frontend tests in watch mode. |
+| `npm run test:rust` | Runs Rust backend tests using Cargo. |
+| `npm run tauri` | Wrapper for the Tauri CLI. |
+
+To run the app in development mode (Desktop):
+```bash
+npm run tauri dev
+```
+
+To build the app for production (Desktop):
+```bash
+npm run tauri build
+```
+
+## Environment Variables
+
+| Variable | Description | Required |
+| :--- | :--- | :--- |
+| `TODO` | Identify any required environment variables for CI/CD or specialized builds. | No |
+
+*Note: For Android builds, sensitive information is typically handled via `keystore.properties` (see `keystore.properties.example`).*
+
+## Tests
+
+### Frontend Tests
+The frontend uses **Vitest** for unit and component testing.
+```bash
+npm run test
+```
+
+### Backend Tests
+The Rust backend uses standard **Cargo** tests.
+```bash
+npm run test:rust
+```
+
+## Project Structure
+
+Key areas of the repo:
+
+- `src/`
+  Frontend source code (Svelte 5).
+  - `src/routes/+page.svelte`: Main app UI, state, QR options, overlays, scanner UX, wallet flow, and encryption/decryption views.
+- `src-tauri/`
+  Native backend and configuration (Tauri/Rust).
+  - `src-tauri/src/lib.rs`: Native commands, QR rendering, image composition, mobile/desktop save logic.
+  - `src-tauri/tauri.conf.json`: Tauri app configuration.
+  - `src-tauri/gen/android`: Generated Android project files and Android-specific patches.
+- `static/`
+  Static assets for the frontend.
+- `docs/`
+  Project documentation and screenshots.
+
+## Running the Project
+
+### Prerequisites
+
+You will want:
+
+- Node.js
+- Rust toolchain
+- Tauri prerequisites
+- Android Studio / Android SDK if building for Android
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+### Web Dev
+
+```bash
+npm run dev
+```
+
+### Desktop Tauri Dev
+
+```bash
+npm run tauri dev
+```
+
+### Checks
+
+```bash
+npm run check
+```
+
+### Production Web Build
+
+```bash
+npm run build
+```
+
+## Typical Workflows
+
+### Desktop Use
+
+Best for:
+
+- quick design iteration
+- testing gradients and overlays
+- checking logo placement
+- working on the Svelte UI
+
+Command:
+
+```bash
+npm run tauri dev
+```
+
+### Android Build and Device Testing
+
+Best for:
+
+- scanner validation on real cameras
+- save/share testing
+- performance checks on physical hardware
+- verifying packaging for different Android CPU targets
+
+Example:
+
+```bash
+npx tauri android build --target aarch64
+```
+
+## Android Builds
+
+Example Android build command:
+
+```bash
+npx tauri android build --target aarch64
+```
+
+This repo has also been used to produce:
+
+- an Android release APK for newer devices
+- a separate `armeabi-v7a` build for older devices
+
+If you are working on Android packaging, also inspect the generated Android files in `src-tauri/gen/android`, because this project includes local fixes and compatibility tweaks there.
+
+## Android Notes
+
+This project has needed a few practical Android-side adjustments for real builds, including:
+
+- Kotlin plugin compatibility fixes in generated Gradle modules
+- JVM target compatibility tweaks
+- SDK version alignment
+
+Those changes are part of why the repo includes generated Android project files instead of treating them as completely disposable.
+
+## Product Direction
+
+QR Studio Ultra is trying to sit in a useful middle ground:
+
+- more polished than a throwaway utility
+- more private than ad-heavy online tools
+- more expressive than default QR libraries
+- still grounded in real scan behavior
+
+That means flashy ideas are welcome, but they need to earn their place by staying usable.
+
+## Roadmap Flavor
+
+The strongest future work for this project usually falls into one of these buckets:
+
+- better visual polish that still scans cleanly
+- stronger export and print workflows
+- broader payload support
+- cleaner native Android behavior
+- refined desktop creator experience
+
+That combination is where the app feels most distinctive.
+
+## Contributing
+
+Contributions are welcome.
+
+Start here:
+
+- `CONTRIBUTING.md`
+
+If you are proposing rendering changes, scanner changes, or new styling systems, please read that guide first so the work lines up with the project’s priorities.
+
+## License
+
+This project is released under the `MIT` License.
+
+
+============================================================
+PACKAGE SCRIPTS
+============================================================
+
+dev: vite dev
+build: vite build
+preview: vite preview
+check: svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+check:watch: svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch
+test: vitest run
+test:watch: vitest
+test:rust: cd src-tauri && cargo test
+tauri: tauri
+
+============================================================
+TAURI BUILD OUTPUT CHECK
+============================================================
+
+Release path exists: True
+Bundle path exists:  False
