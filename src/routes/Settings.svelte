@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { aiProviders, getProviderLabel, testAiProvider } from '$lib/aiService';
   import { settingsStore, type AiProvider } from '$lib/settingsStore.svelte';
+  import { checkDynamicQrHealth } from '$lib/dynamicQr/dynamicQrService';
 
   let { onBack } = $props<{ onBack: () => void }>();
 
@@ -11,6 +12,12 @@
   let showKey = $state(false);
   let testing = $state(false);
   let testStatus = $state<{ type: 'success' | 'error' | 'idle'; message: string }>({ type: 'idle', message: '' });
+
+  let dynamicQrBaseUrl = $state(settingsStore.dynamicQrBaseUrl);
+  let dynamicQrApiKey = $state(settingsStore.dynamicQrApiKey);
+  let showDynamicKey = $state(false);
+  let testingDynamic = $state(false);
+  let dynamicTestStatus = $state<{ type: 'success' | 'error' | 'idle'; message: string }>({ type: 'idle', message: '' });
 
   const selectedProviderMeta = $derived(aiProviders.find((provider) => provider.id === selectedProvider) ?? aiProviders[0]);
 
@@ -23,8 +30,28 @@
   function handleSave() {
     settingsStore.setPreferredAiProvider(selectedProvider);
     settingsStore.setProviderApiKey(selectedProvider, apiKeys[selectedProvider]);
-    testStatus = { type: 'success', message: `${getProviderLabel(selectedProvider)} key saved locally.` };
+    settingsStore.setDynamicQrConfig(dynamicQrBaseUrl, dynamicQrApiKey);
+    testStatus = { type: 'success', message: `${getProviderLabel(selectedProvider)} key and Dynamic QR settings saved locally.` };
     setTimeout(() => { testStatus = { type: 'idle', message: '' }; }, 3000);
+  }
+
+  async function testDynamicConnection() {
+    if (!dynamicQrBaseUrl.trim()) {
+      dynamicTestStatus = { type: 'error', message: 'Enter a Dynamic QR Server URL first.' };
+      return;
+    }
+
+    testingDynamic = true;
+    dynamicTestStatus = { type: 'idle', message: 'Testing Dynamic QR Server...' };
+
+    try {
+      await checkDynamicQrHealth({ baseUrl: dynamicQrBaseUrl, apiKey: dynamicQrApiKey });
+      dynamicTestStatus = { type: 'success', message: 'Connected to Dynamic QR Server.' };
+    } catch (err: any) {
+      dynamicTestStatus = { type: 'error', message: `Connection failed: ${err.message || err}` };
+    } finally {
+      testingDynamic = false;
+    }
   }
 
   function handleClear() {
@@ -158,6 +185,63 @@
           <button class="action-btn clear-btn" type="button" onclick={handleClear}>Clear</button>
           <button class="action-btn save-btn primary-gradient" type="button" onclick={handleSave}>Save</button>
         </div>
+      </div>
+    </section>
+
+    <section class="settings-section" style="margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 40px;">
+      <div class="section-header">
+        <span class="section-icon">🔗</span>
+        <div>
+          <h3>Dynamic QR Configuration</h3>
+          <p class="eyebrow">Public Live Server Integration</p>
+        </div>
+      </div>
+
+      <p class="description">
+        Configure your Dynamic QR server settings. This allows you to create editable QR codes and track usage statistics.
+      </p>
+
+      <div class="input-group">
+        <label for="dynamic-url">Server URL</label>
+        <input
+          id="dynamic-url"
+          type="text"
+          bind:value={dynamicQrBaseUrl}
+          placeholder="https://qrstudio.shadowbourne.org/qru-dynamic"
+          class="text-input"
+        />
+      </div>
+
+      <div class="input-group">
+        <label for="dynamic-key">API Key</label>
+        <div class="password-wrapper">
+          <input
+            id="dynamic-key"
+            type={showDynamicKey ? 'text' : 'password'}
+            bind:value={dynamicQrApiKey}
+            placeholder="QRU_LOCAL_DEV_KEY_CHANGE_ME"
+            class="text-input"
+            autocomplete="off"
+          />
+          <button class="toggle-visibility" type="button" onclick={() => showDynamicKey = !showDynamicKey}>
+            {showDynamicKey ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
+
+      {#if dynamicTestStatus.type !== 'idle'}
+        <div class="status-msg {dynamicTestStatus.type}" transition:fade>
+          <span class="status-icon">
+            {#if dynamicTestStatus.type === 'success'}✓{:else}⚠{/if}
+          </span>
+          {dynamicTestStatus.message}
+        </div>
+      {/if}
+
+      <div class="settings-actions">
+        <button class="action-btn test-btn" type="button" onclick={testDynamicConnection} disabled={testingDynamic}>
+          {testingDynamic ? 'Testing...' : 'Test Connection'}
+        </button>
       </div>
     </section>
   </div>

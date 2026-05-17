@@ -12,7 +12,13 @@ const providerKeys: Record<AiProvider, string> = {
 };
 
 const providerStorageKey = 'qr_studio_ai_provider';
+const dynamicQrBaseUrlKey = 'qr_studio_dynamic_qr_base_url';
+const dynamicQrApiKeyKey = 'qr_studio_dynamic_qr_api_key';
+
 const defaultProvider: AiProvider = 'groq';
+const defaultDynamicQrBaseUrl = 'https://qrstudio.shadowbourne.org/qru-dynamic';
+const defaultDynamicQrApiKey = 'QRU_LOCAL_DEV_KEY_CHANGE_ME';
+
 const providers: AiProvider[] = ['groq', 'gemini', 'deepseek', 'openrouter'];
 
 function readStorage(key: string) {
@@ -32,10 +38,15 @@ function createSettingsStore() {
         openrouter: readStorage(providerKeys.openrouter)
     });
 
+    let dynamicQrBaseUrl = $state<string>(readStorage(dynamicQrBaseUrlKey) || defaultDynamicQrBaseUrl);
+    let dynamicQrApiKey = $state<string>(readStorage(dynamicQrApiKeyKey) || defaultDynamicQrApiKey);
+
     return {
         get preferredAiProvider() { return preferredAiProvider; },
         get aiApiKeys() { return apiKeys; },
         get groqApiKey() { return apiKeys.groq; },
+        get dynamicQrBaseUrl() { return dynamicQrBaseUrl; },
+        get dynamicQrApiKey() { return dynamicQrApiKey; },
         getProviderKey(provider: AiProvider) {
             return apiKeys[provider];
         },
@@ -43,6 +54,14 @@ function createSettingsStore() {
             preferredAiProvider = provider;
             if (browser) {
                 localStorage.setItem(providerStorageKey, provider);
+            }
+        },
+        setDynamicQrConfig(baseUrl: string, apiKey: string) {
+            dynamicQrBaseUrl = baseUrl;
+            dynamicQrApiKey = apiKey;
+            if (browser) {
+                localStorage.setItem(dynamicQrBaseUrlKey, baseUrl);
+                localStorage.setItem(dynamicQrApiKeyKey, apiKey);
             }
         },
         setProviderApiKey(provider: AiProvider, key: string) {

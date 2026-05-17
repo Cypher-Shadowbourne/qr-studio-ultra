@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\\\Users\\\\pbess\\\\Desktop\\\\qr-studio-ultra-upload\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\pbess\\\\Desktop\\\\qr-studio-ultra-upload\" diff HEAD -- src/routes/+page.svelte)",
+      "Bash(git -C \"C:\\\\Users\\\\pbess\\\\Desktop\\\\qr-studio-ultra-upload\" diff HEAD -- src/lib/settingsStore.svelte.ts)",
+      "Bash(npm run *)",
+      "PowerShell($androidHome = $env:ANDROID_HOME ?? $env:LOCALAPPDATA + \"\\\\Android\\\\Sdk\"; Write-Output \"ANDROID_HOME: $androidHome\"; Get-ChildItem \"$androidHome\\\\platform-tools\\\\adb.exe\" -ErrorAction SilentlyContinue | Select-Object FullName)"
+    ]
+  }
+}

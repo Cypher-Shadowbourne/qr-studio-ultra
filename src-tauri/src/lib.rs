@@ -3097,6 +3097,142 @@ mod tests {
     }
 }
 
+// ── Dynamic QR commands ──────────────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+struct DynamicQrRecord {
+    id: String,
+    #[serde(rename = "shortCode")]
+    short_code: String,
+    #[serde(rename = "redirectUrl")]
+    redirect_url: String,
+    #[serde(rename = "targetUrl")]
+    target_url: String,
+    title: String,
+    #[serde(rename = "statsEnabled")]
+    stats_enabled: bool,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
+}
+
+#[tauri::command]
+async fn check_dynamic_qr_health(base_url: String, api_key: String) -> Result<bool, String> {
+    let url = format!("{}/api/v1/health", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::new();
+    let mut req = client.get(&url);
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {api_key}"));
+    }
+    let response = req.send().await.map_err(|e| e.to_string())?;
+    if response.status().is_success() {
+        Ok(true)
+    } else {
+        Err(format!("Health check failed: {}", response.status()))
+    }
+}
+
+#[tauri::command]
+async fn delete_dynamic_qr(
+    base_url: String,
+    api_key: String,
+    record_id: String,
+) -> Result<bool, String> {
+    let url = format!(
+        "{}/api/v1/dynamic-qr/{}",
+        base_url.trim_end_matches('/'),
+        record_id
+    );
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(&url)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = response.status();
+    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let msg = data["message"]
+            .as_str()
+            .or_else(|| data["error"].as_str())
+            .unwrap_or("Failed to delete Dynamic QR");
+        return Err(msg.to_string());
+    }
+    Ok(data["ok"].as_bool().unwrap_or(true))
+}
+
+#[tauri::command]
+async fn get_dynamic_qr_stats(
+    base_url: String,
+    api_key: String,
+    record_id: String,
+    window: String,
+) -> Result<serde_json::Value, String> {
+    let url = format!(
+        "{}/api/v1/dynamic-qr/{}/stats?window={}",
+        base_url.trim_end_matches('/'),
+        record_id,
+        window
+    );
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = response.status();
+    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let msg = data["message"]
+            .as_str()
+            .or_else(|| data["error"].as_str())
+            .unwrap_or("Failed to fetch stats");
+        return Err(msg.to_string());
+    }
+    Ok(data)
+}
+
+#[tauri::command]
+async fn create_dynamic_qr(
+    base_url: String,
+    api_key: String,
+    title: String,
+    target_url: String,
+    stats_enabled: bool,
+) -> Result<DynamicQrRecord, String> {
+    let url = format!("{}/api/v1/dynamic-qr", base_url.trim_end_matches('/'));
+    let body = serde_json::json!({
+        "title": title,
+        "targetUrl": target_url,
+        "statsEnabled": stats_enabled,
+    });
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = response.status();
+    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let msg = data["message"]
+            .as_str()
+            .or_else(|| data["error"].as_str())
+            .unwrap_or("Failed to create Dynamic QR");
+        return Err(msg.to_string());
+    }
+    let record: DynamicQrRecord = serde_json::from_value(data["record"].clone())
+        .map_err(|e| format!("Failed to parse server response: {e}"))?;
+    Ok(record)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -3120,7 +3256,11 @@ pub fn run() {
             open_last_saved_image,
             share_last_saved_image,
             print_current_image,
-            ai_magic
+            ai_magic,
+            check_dynamic_qr_health,
+            create_dynamic_qr,
+            get_dynamic_qr_stats,
+            delete_dynamic_qr
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

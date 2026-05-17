@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell([System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\) -split ';' | Select-String \"cargo\")"
+    ]
+  }
+}

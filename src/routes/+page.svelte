@@ -6,6 +6,9 @@
   import { settingsStore } from "$lib/settingsStore.svelte";
   import SecurityWatermarkControl from "$lib/components/SecurityWatermarkControl.svelte";
   import { generateAiMagicDesign, getProviderLabel } from "$lib/aiService";
+  import { createDynamicQr, deleteDynamicQr, type DynamicQrRecord } from "$lib/dynamicQr/dynamicQrService";
+  import { loadLibrary, addToLibrary, removeFromLibrary, updateLibraryStats, updateLibraryStatsStatus, isStale, formatSavedDate, type DynamicQrLibraryEntry } from "$lib/dynamicQr/dynamicQrLibrary";
+  import DynamicQrStatsPanel from "$lib/dynamicQr/DynamicQrStatsPanel.svelte";
   import Settings from "./Settings.svelte";
   import { Format, scan, cancel, checkPermissions, requestPermissions, openAppSettings } from "@tauri-apps/plugin-barcode-scanner";
   import { save } from "@tauri-apps/plugin-dialog";
@@ -24,6 +27,7 @@
     id: string;
     name: string;
     createdAt: string;
+    updatedAt?: string;
     kind?: "single" | "batch";
     settings: Record<string, any>;
   };
@@ -98,6 +102,18 @@
   let linkedinUser = "";
 
   let ytHandle = "";
+
+  let qrMode: "Static" | "Dynamic" = "Static";
+  let dynamicTitle = "";
+  let dynamicTargetUrl = "";
+  let dynamicStatsEnabled = true;
+  let creatingDynamic = false;
+  let dynamicError = "";
+  let lastDynamicRecord: DynamicQrRecord | null = null;
+  let dynamicQrLibrary: DynamicQrLibraryEntry[] = [];
+  let deleteConfirmEntry: DynamicQrLibraryEntry | null = null;
+  let deleteServerBusy = false;
+  let deleteServerError = "";
 
   let tiktokUser = "";
 
@@ -275,6 +291,12 @@
   const baseQrCanvasSize = 600;
   let logoSizePercent = 22;
   let logoOpacityPercent = 100;
+  let logoMimeType = "";
+  let logoSizeBytes = 0;
+  let logoAddedAt = "";
+  let logoWarning = "";
+  let logoMissingWarning = false;
+  let warnNewDynamicCreate = false;
 
   let watermarkEnabled = false;
   let watermarkValue = "";
@@ -372,7 +394,8 @@
         ringColorMode, ringGradientMode, centerOverlayMode, centerOverlayStyle,
         centerOverlayColor, centerOverlayColor2, centerOverlayColor3, centerOverlayColor4,
         centerOverlayUseFourthStop, centerOverlayGradientMode, centerOverlayColorMode,
-        transparentFrameBg, watermarkEnabled, watermarkValue
+        transparentFrameBg, watermarkEnabled, watermarkValue,
+        qrMode, lastDynamicRecord
       ];
       if (buildFinalQrData().trim()) debouncedRunGeneration();
   }
@@ -382,6 +405,8 @@
   $: fillType = sanitizeFillType(fillType);
   $: ringColorMode = sanitizeColorMode(ringColorMode);
   $: centerOverlayColorMode = sanitizeColorMode(centerOverlayColorMode);
+  $: filteredSingleTemplates = savedTemplates.filter(t => (t.kind ?? 'batch') === 'single');
+  $: filteredBatchTemplates = savedTemplates.filter(t => (t.kind ?? 'batch') !== 'single');
   let logoName = "";
   let logoBase64 = "";
   let logoTrimmedWidth = 200;
@@ -402,6 +427,9 @@
   let recentSaves: { label: string; timestamp: string }[] = [];
   let savedTemplates: StudioTemplate[] = [];
   let templateName = "";
+  let templateTab: "single" | "batch" = "single";
+  let renamingTemplateId: string | null = null;
+  let renamingTemplateInput = "";
   let generationHistory: HistoryEntry[] = [];
   let showHistoryPanel = false;
   let batchInput = "";
@@ -583,6 +611,7 @@
   onMount(() => {
     loadSavedWallets();
     loadSavedTemplates();
+    dynamicQrLibrary = loadLibrary();
     loadGenerationHistory();
   });
 
@@ -830,15 +859,49 @@
   }
 
   function triggerFileInput() { if (fileInput) fileInput.click(); }
+
+  function removeLogo() {
+    logoBase64 = "";
+    logoName = "";
+    logoMimeType = "";
+    logoSizeBytes = 0;
+    logoAddedAt = "";
+    logoWarning = "";
+    logoMissingWarning = false;
+    logoTrimmedWidth = 200;
+    logoTrimmedHeight = 200;
+    if (fileInput) fileInput.value = "";
+    manualGenerationRequested = true;
+    runGeneration();
+  }
   
   // --- SMART AUTO-CROPPER LOGIC ---
   function handleLogoUpload(e: any) {
-    const file = e.target.files[0];
+    const file: File | undefined = e.target.files?.[0];
+    if (fileInput) fileInput.value = "";
     if (!file) return;
-    logoName = file.name;
+
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      logoWarning = `Unsupported file type (${file.type || "unknown"}). Use PNG, JPG, or WEBP.`;
+      return;
+    }
+    logoWarning = "";
+    logoMissingWarning = false;
+    const pendingMime = file.type;
+    const pendingSize = file.size;
+    const pendingName = file.name;
+
     const reader = new FileReader();
+    reader.onerror = () => { logoWarning = "Could not read the image file. Please try another."; };
     reader.onload = (ev: any) => {
-      cropRawSrc = ev.target.result as string;
+      const result = ev.target?.result as string;
+      if (!result || !result.startsWith("data:")) { logoWarning = "Image could not be loaded."; return; }
+      cropRawSrc = result;
+      logoName = pendingName;
+      logoMimeType = pendingMime;
+      logoSizeBytes = pendingSize;
+      logoAddedAt = new Date().toISOString();
       showCropModal = true;
     };
     reader.readAsDataURL(file);
@@ -1288,7 +1351,38 @@
       centerOverlayMode, centerOverlayStyle, centerOverlayColor, centerOverlayColor2,
       centerOverlayColor3, centerOverlayColor4, centerOverlayUseFourthStop,
       centerOverlayGradientMode, centerOverlayColorMode, logoName, logoBase64,
-      logoTrimmedWidth, logoTrimmedHeight, logoSizePercent, logoOpacityPercent
+      logoTrimmedWidth, logoTrimmedHeight, logoSizePercent, logoOpacityPercent,
+      watermarkEnabled, watermarkValue, manualErrorCorrection, errorCorrectionLevel,
+      qrMode, dynamicTitle, dynamicTargetUrl, dynamicStatsEnabled,
+      dynamicRecordId: lastDynamicRecord?.id,
+      dynamicShortCode: lastDynamicRecord?.shortCode,
+      dynamicRedirectUrl: lastDynamicRecord?.redirectUrl,
+      dynamicRecordCreatedAt: lastDynamicRecord?.createdAt,
+      dynamicRecordUpdatedAt: lastDynamicRecord?.updatedAt,
+      dynamicRecordStatsEnabled: lastDynamicRecord?.statsEnabled,
+      dynamicQr: qrMode === "Dynamic" ? {
+        enabled: true,
+        recordId: lastDynamicRecord?.id ?? null,
+        shortCode: lastDynamicRecord?.shortCode ?? null,
+        redirectUrl: lastDynamicRecord?.redirectUrl ?? null,
+        targetUrl: dynamicTargetUrl || null,
+        title: dynamicTitle || null,
+        statsEnabled: dynamicStatsEnabled,
+        createdAt: lastDynamicRecord?.createdAt ?? null,
+        updatedAt: lastDynamicRecord?.updatedAt ?? null,
+      } : { enabled: false },
+      centerLogo: logoBase64 ? {
+        enabled: true,
+        dataUrl: logoBase64,
+        fileName: logoName,
+        mimeType: logoMimeType,
+        sizeBytes: logoSizeBytes,
+        width: logoTrimmedWidth,
+        height: logoTrimmedHeight,
+        opacity: logoOpacityPercent,
+        size: logoSizePercent,
+        addedAt: logoAddedAt,
+      } : { enabled: false },
     };
 
     if (options.includeBatch) {
@@ -1399,15 +1493,103 @@
     centerOverlayUseFourthStop = settings.centerOverlayUseFourthStop ?? centerOverlayUseFourthStop;
     centerOverlayGradientMode = settings.centerOverlayGradientMode ?? centerOverlayGradientMode;
     centerOverlayColorMode = settings.centerOverlayColorMode ?? centerOverlayColorMode;
-    logoName = settings.logoName ?? logoName;
-    logoBase64 = settings.logoBase64 ?? logoBase64;
-    logoTrimmedWidth = settings.logoTrimmedWidth ?? logoTrimmedWidth;
-    logoTrimmedHeight = settings.logoTrimmedHeight ?? logoTrimmedHeight;
-    logoSizePercent = settings.logoSizePercent ?? logoSizePercent;
-    logoOpacityPercent = settings.logoOpacityPercent ?? logoOpacityPercent;
+    // --- Center Logo (prefer structured sub-object; fall back to flat fields) ---
+    logoMissingWarning = false;
+    logoWarning = "";
+    if (settings.centerLogo && typeof settings.centerLogo === "object") {
+      const cl = settings.centerLogo as any;
+      if (cl.enabled && cl.dataUrl) {
+        logoBase64 = cl.dataUrl;
+        logoName = cl.fileName ?? "";
+        logoMimeType = cl.mimeType ?? "";
+        logoSizeBytes = cl.sizeBytes ?? 0;
+        logoTrimmedWidth = cl.width ?? 200;
+        logoTrimmedHeight = cl.height ?? 200;
+        logoSizePercent = cl.size ?? logoSizePercent;
+        logoOpacityPercent = cl.opacity ?? logoOpacityPercent;
+        logoAddedAt = cl.addedAt ?? "";
+      } else if (cl.enabled && !cl.dataUrl) {
+        logoBase64 = "";
+        logoName = cl.fileName ?? "Unknown";
+        logoMissingWarning = true;
+      } else {
+        logoBase64 = "";
+        logoName = "";
+        logoMimeType = "";
+        logoSizeBytes = 0;
+        logoAddedAt = "";
+      }
+    } else {
+      // Legacy flat fields
+      logoBase64 = settings.logoBase64 ?? "";
+      logoName = settings.logoName ?? "";
+      logoTrimmedWidth = settings.logoTrimmedWidth ?? logoTrimmedWidth;
+      logoTrimmedHeight = settings.logoTrimmedHeight ?? logoTrimmedHeight;
+      logoSizePercent = settings.logoSizePercent ?? logoSizePercent;
+      logoOpacityPercent = settings.logoOpacityPercent ?? logoOpacityPercent;
+      if (logoName && !logoBase64) logoMissingWarning = true;
+    }
+
     if (typeof settings.batchInput === "string") {
       batchInput = settings.batchInput;
       batchResults = [];
+    }
+    if (typeof settings.watermarkEnabled === "boolean") watermarkEnabled = settings.watermarkEnabled;
+    if (typeof settings.watermarkValue === "string") watermarkValue = settings.watermarkValue;
+    if (typeof settings.manualErrorCorrection === "boolean") manualErrorCorrection = settings.manualErrorCorrection;
+    if (typeof settings.errorCorrectionLevel === "string") errorCorrectionLevel = settings.errorCorrectionLevel;
+
+    // --- Dynamic QR (prefer structured sub-object; fall back to flat fields) ---
+    warnNewDynamicCreate = false;
+    if (settings.qrMode === "Static") {
+      qrMode = "Static";
+      dynamicTitle = "";
+      dynamicTargetUrl = "";
+      dynamicStatsEnabled = true;
+      dynamicError = "";
+      lastDynamicRecord = null;
+    } else if (settings.qrMode === "Dynamic") {
+      qrMode = "Dynamic";
+      dynamicError = "";
+      const dq = settings.dynamicQr as any;
+      if (dq && typeof dq === "object" && dq.enabled) {
+        dynamicTitle = dq.title ?? "";
+        dynamicTargetUrl = dq.targetUrl ?? "";
+        dynamicStatsEnabled = typeof dq.statsEnabled === "boolean" ? dq.statsEnabled : true;
+        if (dq.recordId && dq.redirectUrl) {
+          lastDynamicRecord = {
+            id: dq.recordId,
+            shortCode: dq.shortCode ?? "",
+            redirectUrl: dq.redirectUrl,
+            targetUrl: dq.targetUrl ?? "",
+            title: dq.title ?? "",
+            statsEnabled: dq.statsEnabled ?? false,
+            createdAt: dq.createdAt ?? "",
+            updatedAt: dq.updatedAt ?? "",
+          };
+        } else {
+          lastDynamicRecord = null;
+        }
+      } else {
+        // Legacy flat fields
+        dynamicTitle = settings.dynamicTitle ?? "";
+        dynamicTargetUrl = settings.dynamicTargetUrl ?? "";
+        dynamicStatsEnabled = typeof settings.dynamicStatsEnabled === "boolean" ? settings.dynamicStatsEnabled : true;
+        if (settings.dynamicRecordId && settings.dynamicRedirectUrl) {
+          lastDynamicRecord = {
+            id: settings.dynamicRecordId,
+            shortCode: settings.dynamicShortCode ?? "",
+            redirectUrl: settings.dynamicRedirectUrl,
+            targetUrl: settings.dynamicTargetUrl ?? "",
+            title: settings.dynamicTitle ?? "",
+            statsEnabled: settings.dynamicRecordStatsEnabled ?? false,
+            createdAt: settings.dynamicRecordCreatedAt ?? "",
+            updatedAt: settings.dynamicRecordUpdatedAt ?? "",
+          };
+        } else {
+          lastDynamicRecord = null;
+        }
+      }
     }
     return true;
   }
@@ -1443,12 +1625,14 @@
     }
 
     const fallbackName = kind === "batch" ? `Batch ${getBatchLines().length} items` : `${fillType} ${mainShape} template`;
-    const name = (templateName.trim() || fallbackName).slice(0, 48);
+    const name = (templateName.trim() || fallbackName).slice(0, 80);
+    const now = new Date().toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" });
     const template: StudioTemplate = {
       id: `${Date.now()}`,
       name,
       kind,
-      createdAt: new Date().toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" }),
+      createdAt: now,
+      updatedAt: now,
       settings: getStyleTemplateSnapshot({ includeBatch: kind === "batch" })
     };
     const nextTemplates = [template, ...savedTemplates.filter((item) => item.name !== name)].slice(0, 12);
@@ -1512,6 +1696,23 @@
     savedTemplates = savedTemplates.filter((item) => item.id !== id);
     persistSavedTemplates();
     showSaveToastMessage("Template removed.", "info");
+  }
+
+  function renameTemplate(id: string, newName: string) {
+    const name = newName.trim().slice(0, 80);
+    if (!name) {
+      showSaveToastMessage("Template name is required.", "error");
+      return;
+    }
+    const updatedAt = new Date().toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" });
+    const target = savedTemplates.find(t => t.id === id);
+    if (!target) return;
+    // Move renamed template to front so it sorts as most-recently-updated
+    savedTemplates = [{ ...target, name, updatedAt }, ...savedTemplates.filter(t => t.id !== id)];
+    persistSavedTemplates();
+    renamingTemplateId = null;
+    renamingTemplateInput = "";
+    showSaveToastMessage(`Renamed to "${name}".`, "success");
   }
 
   function loadGenerationHistory() {
@@ -3058,9 +3259,10 @@
 
 
   async function runGeneration() {
+    const finalData = buildFinalQrData();
+    if (!finalData.trim()) return;
     showDogTagWarning = false;
     loading = true;
-    const finalData = buildFinalQrData();
 
     try {
       const rustImageB64 = await invoke<string>("generate_ultra_qr", {
@@ -3230,7 +3432,100 @@
     }
   }
 
+  async function handleCreateDynamicQr() {
+    dynamicError = "";
+    if (!dynamicTitle.trim()) {
+      dynamicError = "Title is required.";
+      return;
+    }
+    if (!dynamicTargetUrl.trim()) {
+      dynamicError = "Destination URL is required.";
+      return;
+    }
+
+    creatingDynamic = true;
+    try {
+      const config = {
+        baseUrl: settingsStore.dynamicQrBaseUrl,
+        apiKey: settingsStore.dynamicQrApiKey
+      };
+      const input = {
+        title: dynamicTitle,
+        targetUrl: dynamicTargetUrl,
+        statsEnabled: dynamicStatsEnabled
+      };
+      const record = await createDynamicQr(config, input);
+      lastDynamicRecord = record;
+      dynamicQrLibrary = addToLibrary(record);
+      manualGenerationRequested = true;
+      await tick();
+      runGeneration();
+      showSaveToastMessage("Dynamic QR Record Created!", "success");
+    } catch (e: any) {
+      dynamicError = e.message || "Failed to create Dynamic QR.";
+      showSaveToastMessage("Failed to create Dynamic QR", "error");
+    } finally {
+      creatingDynamic = false;
+    }
+  }
+
+  function toggleQrMode() {
+    qrMode = qrMode === "Static" ? "Dynamic" : "Static";
+  }
+
+  function handleViewStats(entry: DynamicQrLibraryEntry) {
+    lastDynamicRecord = entry.record;
+    currentView = 'dynStats';
+  }
+
+  function handleLocalRemove(entry: DynamicQrLibraryEntry) {
+    dynamicQrLibrary = removeFromLibrary(entry.record.id);
+    if (lastDynamicRecord?.id === entry.record.id) lastDynamicRecord = null;
+  }
+
+  function handleServerDeleteRequest(entry: DynamicQrLibraryEntry) {
+    deleteServerError = "";
+    deleteConfirmEntry = entry;
+  }
+
+  function cancelServerDelete() {
+    deleteConfirmEntry = null;
+    deleteServerError = "";
+    deleteServerBusy = false;
+  }
+
+  async function confirmServerDelete() {
+    if (!deleteConfirmEntry) return;
+    const entry = deleteConfirmEntry;
+    if (!settingsStore.dynamicQrBaseUrl) { deleteServerError = "Server URL not configured."; return; }
+    if (!settingsStore.dynamicQrApiKey) { deleteServerError = "API key not configured."; return; }
+    deleteServerBusy = true;
+    deleteServerError = "";
+    try {
+      await deleteDynamicQr(
+        { baseUrl: settingsStore.dynamicQrBaseUrl, apiKey: settingsStore.dynamicQrApiKey },
+        entry.record.id
+      );
+      dynamicQrLibrary = removeFromLibrary(entry.record.id);
+      if (lastDynamicRecord?.id === entry.record.id) lastDynamicRecord = null;
+      deleteConfirmEntry = null;
+    } catch (e: any) {
+      deleteServerError = e.message || "Server delete failed.";
+    } finally {
+      deleteServerBusy = false;
+    }
+  }
+
   function buildFinalQrData() {
+    if (qrMode === "Dynamic") {
+      if (!lastDynamicRecord) return "";
+      let finalData = lastDynamicRecord.redirectUrl;
+      if (watermarkEnabled && watermarkValue && !finalData.includes("WMARK:")) {
+        finalData += `\nWMARK:${watermarkValue}`;
+      }
+      return finalData;
+    }
+
     let finalData = qrData;
     if (dataType === "WiFi") {
       finalData = `WIFI:S:${wifiSsid};T:WPA;P:${wifiPass};;`;
@@ -3661,7 +3956,148 @@
           </div>
         {/if}
 
-        <select bind:value={dataType}>
+        <div class="mode-selector" style="display: flex; gap: 8px; margin-bottom: 1rem; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+          <button
+            type="button"
+            style="flex: 1; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: all 0.2s; {qrMode === 'Static' ? 'background: var(--accent-gradient); color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2);' : 'background: transparent; color: rgba(255,255,255,0.6);'}"
+            on:click={() => qrMode = 'Static'}
+          >
+            Static QR
+          </button>
+          <button
+            type="button"
+            style="flex: 1; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: all 0.2s; {qrMode === 'Dynamic' ? 'background: var(--accent-gradient); color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2);' : 'background: transparent; color: rgba(255,255,255,0.6);'}"
+            on:click={() => qrMode = 'Dynamic'}
+          >
+            Dynamic QR
+          </button>
+        </div>
+
+        {#if qrMode === "Dynamic"}
+          <div class="dynamic-qr-fields" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; padding: 15px; background: rgba(33, 212, 253, 0.05); border: 1px solid rgba(33, 212, 253, 0.2); border-radius: 16px;">
+            <div class="field-group">
+              <label for="dyn-title" style="display: block; font-size: 0.75rem; font-weight: 900; color: #21d4fd; text-transform: uppercase; margin-bottom: 6px; margin-left: 4px;">Dynamic Title</label>
+              <input id="dyn-title" type="text" bind:value={dynamicTitle} placeholder="Marketing Campaign 2024" />
+            </div>
+            <div class="field-group">
+              <label for="dyn-target" style="display: block; font-size: 0.75rem; font-weight: 900; color: #21d4fd; text-transform: uppercase; margin-bottom: 6px; margin-left: 4px;">Destination URL</label>
+              <input id="dyn-target" type="text" bind:value={dynamicTargetUrl} placeholder="https://destination.example" />
+            </div>
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: rgba(255,255,255,0.8); cursor: pointer; padding: 4px;">
+              <input type="checkbox" bind:checked={dynamicStatsEnabled} style="width: 18px; height: 18px; cursor: pointer;" />
+              Enable Usage Statistics
+            </label>
+
+            {#if dynamicError}
+              <div class="error-msg" style="color: #ff4d4d; font-size: 0.85rem; font-weight: bold; padding: 8px 12px; background: rgba(255,77,77,0.1); border-radius: 8px; border: 1px solid rgba(255,77,77,0.2);">
+                ⚠️ {dynamicError}
+              </div>
+            {/if}
+
+            {#if lastDynamicRecord}
+              {#if warnNewDynamicCreate}
+                <div style="padding: 12px 14px; background: rgba(255,184,0,0.08); border: 1px solid rgba(255,184,0,0.3); border-radius: 12px; display: flex; flex-direction: column; gap: 8px;">
+                  <p style="margin: 0; font-size: 0.82rem; font-weight: 700; color: #ffb800;">⚠ A Dynamic QR record is already linked. Creating a new one will replace it — the old redirect URL will stop working in this template.</p>
+                  <div style="display: flex; gap: 8px;">
+                    <button type="button" style="flex: 1; padding: 10px; border-radius: 10px; border: none; background: linear-gradient(135deg,#ff1a64,#b721ff); color: #fff; font-weight: 900; font-size: 0.78rem; cursor: pointer; text-transform: uppercase;" disabled={creatingDynamic} on:click={() => { warnNewDynamicCreate = false; handleCreateDynamicQr(); }}>{creatingDynamic ? "Creating…" : "Confirm — Create New"}</button>
+                    <button type="button" style="flex: 1; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: rgba(247,248,255,0.7); font-weight: 700; font-size: 0.78rem; cursor: pointer; text-transform: uppercase;" on:click={() => warnNewDynamicCreate = false}>Cancel</button>
+                  </div>
+                </div>
+              {:else}
+                <button type="button" style="padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: rgba(247,248,255,0.55); font-size: 0.78rem; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;" on:click={() => warnNewDynamicCreate = true}>Create New Dynamic QR From This Template</button>
+              {/if}
+            {:else}
+              <button
+                class="wallet-btn"
+                type="button"
+                style="background: var(--accent-gradient); color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; box-shadow: 0 4px 15px rgba(33, 212, 253, 0.3);"
+                disabled={creatingDynamic}
+                on:click={handleCreateDynamicQr}
+              >
+                {creatingDynamic ? "Creating Record..." : "Create Dynamic QR"}
+              </button>
+            {/if}
+
+            {#if lastDynamicRecord}
+              <div class="success-info" style="margin-top: 10px; padding: 14px; background: rgba(0,255,136,0.05); border: 1px solid rgba(0,255,136,0.2); border-radius: 14px; display: flex; flex-direction: column; gap: 6px;">
+                <p style="margin: 0; color: #00FF88; font-size: 0.82rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">Linked Dynamic QR</p>
+                <p style="margin: 0; color: rgba(255,255,255,0.55); font-size: 0.75rem;"><span style="color:#21d4fd;font-weight:800;">Title:</span> {lastDynamicRecord.title}</p>
+                <p style="margin: 0; color: rgba(255,255,255,0.55); font-size: 0.75rem; word-break: break-all;"><span style="color:#21d4fd;font-weight:800;">Destination:</span> {lastDynamicRecord.targetUrl}</p>
+                <p style="margin: 0; color: rgba(255,255,255,0.7); font-size: 0.78rem; font-weight: 700; word-break: break-all;">{lastDynamicRecord.redirectUrl}</p>
+                <p style="margin: 0; color: rgba(255,255,255,0.35); font-size: 0.7rem; font-family: monospace;"><span style="color:#21d4fd;font-weight:800;font-family:inherit;">ID:</span> {lastDynamicRecord.id}</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+                  <button
+                    type="button"
+                    style="flex: 1; min-width: 80px; padding: 8px; border-radius: 10px; border: none; background: linear-gradient(135deg,#21d4fd,#b721ff); color: #fff; font-weight: 900; font-size: 0.75rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;"
+                    on:click={() => currentView = 'dynStats'}
+                  >Refresh Stats</button>
+                  <button
+                    type="button"
+                    style="flex: 1; min-width: 80px; padding: 8px; border-radius: 10px; border: 1px solid rgba(33,212,253,0.25); background: rgba(33,212,253,0.07); color: #21d4fd; font-weight: 700; font-size: 0.75rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;"
+                    on:click={() => navigator.clipboard.writeText(lastDynamicRecord!.redirectUrl).then(() => showSaveToastMessage('Redirect URL copied!', 'success'))}
+                  >Copy URL</button>
+                  <button
+                    type="button"
+                    style="flex: 1; min-width: 80px; padding: 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: rgba(247,248,255,0.65); font-weight: 700; font-size: 0.75rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;"
+                    on:click={() => window.open(lastDynamicRecord!.redirectUrl, '_blank')}
+                  >Open URL</button>
+                </div>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Dynamic QR Library -->
+          {#if dynamicQrLibrary.length > 0}
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 1rem;">
+              <p style="margin: 0 0 4px 2px; font-size: 0.68rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.14em; color: #21d4fd;">Saved Dynamic QRs</p>
+              {#each dynamicQrLibrary as entry (entry.record.id)}
+                <div style="background: #18181F; border: 1px solid {isStale(entry) ? 'rgba(255,200,0,0.25)' : '#2A2A33'}; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+                  {#if entry.statsStatus === 'loading'}
+                    <span style="font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #21d4fd; background: rgba(33,212,253,0.08); border: 1px solid rgba(33,212,253,0.2); border-radius: 6px; padding: 2px 8px; align-self: flex-start;">Loading stats…</span>
+                  {:else if entry.statsStatus === 'error'}
+                    <span style="font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #ff6ab0; background: rgba(255,26,100,0.08); border: 1px solid rgba(255,26,100,0.2); border-radius: 6px; padding: 2px 8px; align-self: flex-start;">Stats unavailable</span>
+                  {:else if isStale(entry)}
+                    <span style="font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #ffb800; background: rgba(255,184,0,0.1); border: 1px solid rgba(255,184,0,0.2); border-radius: 6px; padding: 2px 8px; align-self: flex-start;">Possible stale code</span>
+                  {:else if entry.statsStatus === 'loaded'}
+                    <span style="font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #00FF88; background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2); border-radius: 6px; padding: 2px 8px; align-self: flex-start;">Active</span>
+                  {:else}
+                    <span style="font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(247,248,255,0.35); background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 2px 8px; align-self: flex-start;">Stats not loaded</span>
+                  {/if}
+                  <p style="margin: 0; font-size: 0.9rem; font-weight: 800; color: #F7F8FF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{entry.record.title}</p>
+                  <p style="margin: 0; font-size: 0.72rem; color: rgba(247,248,255,0.45); word-break: break-all;">{entry.record.redirectUrl}</p>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap; font-size: 0.7rem; color: rgba(247,248,255,0.4);">
+                    <span>Created {formatSavedDate(entry.record.createdAt)}</span>
+                    {#if entry.cachedTotalScans !== null}
+                      <span>· {entry.cachedTotalScans} scans</span>
+                    {/if}
+                    {#if entry.cachedLastScanAt}
+                      <span>· Last scan {entry.cachedLastScanAt}</span>
+                    {/if}
+                  </div>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+                    <button
+                      type="button"
+                      style="flex: 1; min-width: 90px; padding: 8px 10px; border-radius: 10px; border: none; background: linear-gradient(135deg,#21d4fd,#b721ff); color: #fff; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;"
+                      on:click={() => handleViewStats(entry)}
+                    >View Stats</button>
+                    <button
+                      type="button"
+                      style="flex: 1; min-width: 90px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: rgba(247,248,255,0.7); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;"
+                      on:click={() => handleLocalRemove(entry)}
+                    >Remove Locally</button>
+                    <button
+                      type="button"
+                      style="flex: 1; min-width: 90px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,26,100,0.25); background: rgba(255,26,100,0.07); color: #ff6ab0; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;"
+                      on:click={() => handleServerDeleteRequest(entry)}
+                    >Delete From Server</button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+        {:else}
+          <select bind:value={dataType}>
           <option value="URL">Standard Link (URL)</option>
           <option value="Text">Plain Text</option>
           <option value="WiFi">WiFi Network</option>
@@ -3785,6 +4221,7 @@
             <input type="text" bind:value={zoomPass} placeholder="Passcode (Optional)" />
           </div>
         {/if}
+        {/if}
       </fieldset>
 
       <fieldset class="panel intelligence-panel">
@@ -3842,26 +4279,103 @@
         </div>
 
         <div class="sub-panel">
-          <div class="field-head">
-            <p class="sub-label">Templates</p>
-            <button class="mini-action" type="button" on:click={saveCurrentTemplate}>Save</button>
+          <p class="sub-label" style="margin-bottom: 10px;">Templates</p>
+
+          <!-- Single / Batch tab pills -->
+          <div style="display: flex; gap: 3px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 3px; margin-bottom: 14px;">
+            <button
+              type="button"
+              style="flex: 1; padding: 7px 4px; border-radius: 9px; border: none; cursor: pointer; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; {templateTab === 'single' ? 'background: linear-gradient(135deg,#21d4fd,#b721ff); color: #fff; box-shadow: 0 2px 8px rgba(33,212,253,0.2);' : 'background: transparent; color: rgba(255,255,255,0.45);'}"
+              on:click={() => { templateTab = 'single'; renamingTemplateId = null; }}
+            >Single ({filteredSingleTemplates.length})</button>
+            <button
+              type="button"
+              style="flex: 1; padding: 7px 4px; border-radius: 9px; border: none; cursor: pointer; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; {templateTab === 'batch' ? 'background: linear-gradient(135deg,#21d4fd,#b721ff); color: #fff; box-shadow: 0 2px 8px rgba(33,212,253,0.2);' : 'background: transparent; color: rgba(255,255,255,0.45);'}"
+              on:click={() => { templateTab = 'batch'; renamingTemplateId = null; }}
+            >Batch ({filteredBatchTemplates.length})</button>
           </div>
-          <input type="text" bind:value={templateName} placeholder="Template name" />
-          {#if savedTemplates.length}
-            <div class="compact-list">
-              {#each savedTemplates as template (template.id)}
-                <div class="compact-card">
-                  <div>
-                    <strong>{template.name}</strong>
-                    <span>{template.kind === "batch" || getTemplateBatchLines(template).length ? "Batch" : "Template"} · {template.createdAt}</span>
-                  </div>
-                  <div class="compact-actions">
-                    <button class="mini-action" type="button" on:click={() => loadTemplate(template)}>Load</button>
-                    <button class="mini-action danger-mini" type="button" on:click={() => deleteTemplate(template.id)}>Delete</button>
-                  </div>
-                </div>
-              {/each}
+
+          {#if templateTab === 'single'}
+            <!-- Save as Single Template -->
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <input type="text" bind:value={templateName} placeholder="Template name" maxlength="80" style="flex: 1; min-width: 0;" />
+              <button class="mini-action" type="button" on:click={saveCurrentTemplate} style="flex-shrink: 0; white-space: nowrap;">Save as Single Template</button>
             </div>
+
+            {#if filteredSingleTemplates.length}
+              <div class="compact-list">
+                {#each filteredSingleTemplates as template (template.id)}
+                  <div class="compact-card" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                    {#if renamingTemplateId === template.id}
+                      <input
+                        type="text"
+                        bind:value={renamingTemplateInput}
+                        maxlength="80"
+                        placeholder="Template name"
+                        style="width: 100%; box-sizing: border-box;"
+                      />
+                      <div class="compact-actions">
+                        <button class="mini-action" type="button" on:click={() => renameTemplate(template.id, renamingTemplateInput)}>Save Name</button>
+                        <button class="mini-action danger-mini" type="button" on:click={() => { renamingTemplateId = null; }}>Cancel</button>
+                      </div>
+                    {:else}
+                      <div>
+                        <strong style="font-size: 0.88rem; display: block; margin-bottom: 5px; color: #F7F8FF; word-break: break-word;">{template.name}</strong>
+                        <div style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 5px;">
+                          <span style="font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; padding: 2px 7px; border-radius: 6px; {template.settings?.qrMode === 'Dynamic' ? 'background: rgba(33,212,253,0.12); color: #21d4fd; border: 1px solid rgba(33,212,253,0.25);' : 'background: rgba(255,255,255,0.07); color: rgba(247,248,255,0.6); border: 1px solid rgba(255,255,255,0.12);'}">{template.settings?.qrMode ?? 'Static'}</span>
+                          <span style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.05); color: rgba(247,248,255,0.5); border: 1px solid rgba(255,255,255,0.08);">{template.settings?.qrMode === 'Dynamic' ? 'Dynamic QR' : (template.settings?.dataType ?? 'QR')}</span>
+                          {#if template.settings?.centerLogo?.enabled && template.settings?.centerLogo?.dataUrl}
+                            <span style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 6px; background: rgba(183,33,255,0.1); color: #b721ff; border: 1px solid rgba(183,33,255,0.2);">Logo saved</span>
+                          {:else if template.settings?.centerLogo?.enabled && !template.settings?.centerLogo?.dataUrl}
+                            <span style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 6px; background: rgba(255,184,0,0.1); color: #ffb800; border: 1px solid rgba(255,184,0,0.2);">Logo missing</span>
+                          {:else if !template.settings?.centerLogo && template.settings?.logoBase64}
+                            <span style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 6px; background: rgba(183,33,255,0.1); color: #b721ff; border: 1px solid rgba(183,33,255,0.2);">Logo saved</span>
+                          {:else if !template.settings?.centerLogo && template.settings?.logoName && !template.settings?.logoBase64}
+                            <span style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 6px; background: rgba(255,184,0,0.1); color: #ffb800; border: 1px solid rgba(255,184,0,0.2);">Logo missing</span>
+                          {:else}
+                            <span style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.04); color: rgba(247,248,255,0.3); border: 1px solid rgba(255,255,255,0.06);">No logo</span>
+                          {/if}
+                        </div>
+                        {#if template.settings?.dynamicQr?.redirectUrl}
+                          <p style="margin: 0 0 4px; font-size: 0.68rem; color: #21d4fd; font-weight: 600; word-break: break-all; opacity: 0.85;">{template.settings.dynamicQr.redirectUrl}</p>
+                        {:else if template.settings?.dynamicRedirectUrl}
+                          <p style="margin: 0 0 4px; font-size: 0.68rem; color: #21d4fd; font-weight: 600; word-break: break-all; opacity: 0.85;">{template.settings.dynamicRedirectUrl}</p>
+                        {/if}
+                        <span style="font-size: 0.68rem; color: rgba(247,248,255,0.35);">Created {template.createdAt}{template.updatedAt && template.updatedAt !== template.createdAt ? ' · Updated ' + template.updatedAt : ''}</span>
+                      </div>
+                      <div class="compact-actions" style="flex-wrap: wrap;">
+                        <button class="mini-action" type="button" on:click={() => loadTemplate(template)}>Use Template</button>
+                        <button class="mini-action" type="button" on:click={() => { renamingTemplateId = template.id; renamingTemplateInput = template.name; }}>Rename</button>
+                        <button class="mini-action danger-mini" type="button" on:click={() => deleteTemplate(template.id)}>Delete</button>
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p style="text-align: center; color: rgba(247,248,255,0.28); font-size: 0.82rem; padding: 18px 0; margin: 0;">No single templates saved yet.<br/>Enter a name above and tap Save.</p>
+            {/if}
+
+          {:else}
+            <!-- Batch tab -->
+            {#if filteredBatchTemplates.length}
+              <div class="compact-list">
+                {#each filteredBatchTemplates as template (template.id)}
+                  <div class="compact-card">
+                    <div>
+                      <strong>{template.name}</strong>
+                      <span>Batch · {template.createdAt}</span>
+                    </div>
+                    <div class="compact-actions">
+                      <button class="mini-action" type="button" on:click={() => loadTemplate(template)}>Load</button>
+                      <button class="mini-action danger-mini" type="button" on:click={() => deleteTemplate(template.id)}>Delete</button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p style="text-align: center; color: rgba(247,248,255,0.28); font-size: 0.82rem; padding: 18px 0; margin: 0;">No batch templates saved yet.<br/>Use "Save Batch Template" below.</p>
+            {/if}
           {/if}
         </div>
 
@@ -4291,10 +4805,42 @@
       </fieldset>
 
       <fieldset class="panel blank-panel">
-        <input type="file" accept="image/png, image/jpeg" bind:this={fileInput} on:change={handleLogoUpload} style="display: none;" />
-        <button class="upload-btn" on:click={triggerFileInput} class:has-logo={logoName !== ""}>
-          {logoName !== "" ? `Logo Loaded: ${logoName}` : "Upload Center Logo"}
-        </button>
+        <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" bind:this={fileInput} on:change={handleLogoUpload} style="display: none;" />
+
+        {#if logoMissingWarning}
+          <div style="background: rgba(255,184,0,0.08); border: 1px solid rgba(255,184,0,0.3); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
+            <p style="margin: 0; font-size: 0.82rem; font-weight: 700; color: #ffb800;">⚠ Logo missing — "{logoName}" could not be restored.</p>
+            <div style="display: flex; gap: 8px;">
+              <button class="mini-action" type="button" on:click={triggerFileInput}>Replace Logo</button>
+              <button class="mini-action danger-mini" type="button" on:click={removeLogo}>Remove Logo</button>
+            </div>
+          </div>
+        {/if}
+
+        {#if logoWarning}
+          <p style="margin: 0 0 10px; padding: 10px 12px; background: rgba(255,26,100,0.08); border: 1px solid rgba(255,26,100,0.25); border-radius: 10px; color: #ff6ab0; font-size: 0.82rem; font-weight: 600;">⚠ {logoWarning}</p>
+        {/if}
+
+        {#if !logoBase64}
+          <button class="upload-btn" type="button" on:click={triggerFileInput}>Add Center Logo</button>
+        {:else}
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button class="upload-btn has-logo" type="button" style="flex: 1;" on:click={triggerFileInput}>Replace Center Logo</button>
+            <button type="button" style="padding: 12px 14px; background: rgba(255,26,100,0.08); border: 1px solid rgba(255,26,100,0.25); border-radius: 12px; color: #ff6ab0; font-weight: 700; font-size: 0.8rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;" on:click={removeLogo}>Remove</button>
+          </div>
+          <div style="padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 0.75rem; color: rgba(247,248,255,0.7); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{logoName || "Center Logo"}</span>
+            {#if logoSizeBytes > 0}
+              <span style="font-size: 0.68rem; color: rgba(247,248,255,0.4); flex-shrink: 0;">{(logoSizeBytes / 1024).toFixed(0)} KB</span>
+            {/if}
+            {#if logoMimeType}
+              <span style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 5px; background: rgba(33,212,253,0.1); color: #21d4fd; flex-shrink: 0;">{logoMimeType.replace('image/', '')}</span>
+            {/if}
+          </div>
+          {#if logoSizePercent > 24}
+            <p style="margin: 0 0 8px; font-size: 0.78rem; color: #ffb800; font-weight: 600;">⚠ Large center logo may reduce QR scannability.</p>
+          {/if}
+        {/if}
         <div class="sub-panel mt-10">
           <p class="sub-label">Center Photo Overlay</p>
           <label class="select-field full-width">Inner Overlay Mode
@@ -4504,6 +5050,43 @@
         <p class="print-stamp">Generated {generatedAt}</p>
       </div>
     </section>
+  {/if}
+
+  <!-- Delete confirmation modal -->
+  {#if deleteConfirmEntry}
+    <div
+      style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 24px;"
+      on:click|self={cancelServerDelete}
+      on:keydown={(e) => { if (e.key === 'Escape') cancelServerDelete(); }}
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <div style="background: #18181F; border: 1px solid rgba(255,26,100,0.3); border-radius: 22px; padding: 26px 22px; max-width: 360px; width: 100%; display: flex; flex-direction: column; gap: 14px;" in:scale={{ duration: 200, start: 0.92 }}>
+        <p style="margin: 0; font-size: 1rem; font-weight: 900; color: #ff6ab0; text-transform: uppercase; letter-spacing: 0.5px;">Delete this Dynamic QR from the server?</p>
+        <p style="margin: 0; font-size: 0.85rem; color: rgba(247,248,255,0.75); line-height: 1.5;">
+          This will make its redirect URL stop working:<br/>
+          <span style="color: #21d4fd; font-weight: 700; word-break: break-all;">{deleteConfirmEntry.record.redirectUrl}</span>
+        </p>
+        <p style="margin: 0; font-size: 0.82rem; font-weight: 700; color: rgba(247,248,255,0.45);">This cannot be undone.</p>
+        {#if deleteServerError}
+          <div style="padding: 10px 14px; background: rgba(255,26,100,0.08); border: 1px solid rgba(255,26,100,0.25); border-radius: 10px; color: #ff6ab0; font-size: 0.82rem; font-weight: 600;">⚠ {deleteServerError}</div>
+        {/if}
+        <div style="display: flex; gap: 10px; margin-top: 4px;">
+          <button
+            type="button"
+            style="flex: 1; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: rgba(247,248,255,0.75); font-size: 0.85rem; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;"
+            on:click={cancelServerDelete}
+          >Cancel</button>
+          <button
+            type="button"
+            style="flex: 1; padding: 12px; border-radius: 12px; border: none; background: linear-gradient(135deg,#ff1a64,#b721ff); color: #fff; font-size: 0.85rem; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; opacity: {deleteServerBusy ? 0.6 : 1};"
+            disabled={deleteServerBusy}
+            on:click={confirmServerDelete}
+          >{deleteServerBusy ? "Deleting…" : "Delete From Server"}</button>
+        </div>
+      </div>
+    </div>
   {/if}
 </main>
 
@@ -5707,4 +6290,17 @@
 
 {:else if currentView === 'settings'}
   <Settings onBack={() => currentView = 'studio'} />
+{:else if currentView === 'dynStats' && lastDynamicRecord}
+  <DynamicQrStatsPanel
+    record={lastDynamicRecord}
+    baseUrl={settingsStore.dynamicQrBaseUrl}
+    apiKey={settingsStore.dynamicQrApiKey}
+    onBack={() => currentView = 'studio'}
+    onStatsLoaded={(totalScans, lastScanAt) => {
+      if (lastDynamicRecord) dynamicQrLibrary = updateLibraryStats(lastDynamicRecord.id, totalScans, lastScanAt);
+    }}
+    onStatsError={(_err) => {
+      if (lastDynamicRecord) dynamicQrLibrary = updateLibraryStatsStatus(lastDynamicRecord.id, 'error');
+    }}
+  />
 {/if}
